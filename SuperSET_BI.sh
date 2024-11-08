@@ -65,13 +65,16 @@ function install_superset() {
   pip install apache-superset
   msg_ok "Apache Superset installed"
 
-  # Définir FLASK_APP et configurer une clé secrète sécurisée
-  export FLASK_APP=superset
+  # Générer et configurer une clé secrète sécurisée
   SECRET_KEY=$(openssl rand -base64 42)
-  cat <<EOF >/opt/superset-venv/lib/python3.11/site-packages/superset_config.py
+  cat <<EOF >/opt/superset-venv/superset_config.py
 # Configuration sécurisée de Superset
 SECRET_KEY = "$SECRET_KEY"
 EOF
+
+  # Définir les variables d'environnement pour la configuration
+  export FLASK_APP=superset
+  export SUPERSET_CONFIG_PATH=/opt/superset-venv/superset_config.py
   msg_ok "Secure SECRET_KEY configured in superset_config.py"
 
   msg_info "Initializing Superset database"
@@ -102,6 +105,7 @@ Group=root
 WorkingDirectory=/opt/superset-venv
 Environment="PATH=/opt/superset-venv/bin"
 Environment="FLASK_APP=superset"
+Environment="SUPERSET_CONFIG_PATH=/opt/superset-venv/superset_config.py"
 ExecStart=/opt/superset-venv/bin/gunicorn --workers 3 --timeout 120 --bind 0.0.0.0:8088 "superset.app:create_app()"
 Restart=always
 
