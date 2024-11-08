@@ -65,8 +65,14 @@ function install_superset() {
   pip install apache-superset
   msg_ok "Apache Superset installed"
 
-  # Définir FLASK_APP pour que Superset puisse trouver l'application
+  # Définir FLASK_APP et configurer une clé secrète sécurisée
   export FLASK_APP=superset
+  SECRET_KEY=$(openssl rand -base64 42)
+  cat <<EOF >/opt/superset-venv/lib/python3.11/site-packages/superset_config.py
+# Configuration sécurisée de Superset
+SECRET_KEY = "$SECRET_KEY"
+EOF
+  msg_ok "Secure SECRET_KEY configured in superset_config.py"
 
   msg_info "Initializing Superset database"
   superset db upgrade
