@@ -52,18 +52,33 @@ function install_superset() {
   header_info
   msg_info "Installing dependencies inside the container"
   pct exec $CTID -- bash -c "apt update && apt upgrade -y"
-  pct exec $CTID -- bash -c "apt install -y build-essential libssl-dev libffi-dev python3 python3-pip python3-dev libsasl2-dev libldap2-dev python3.11-venv"
+  pct exec $CTID -- bash -c "apt install -y build-essential libssl-dev libffi-dev python3 python3-pip python3-dev libsasl2-dev libldap2-dev python3.11-venv redis-server"
   msg_ok "Dependencies Installed"
 
   msg_info "Creating Python virtual environment for Superset"
   pct exec $CTID -- bash -c "python3 -m venv /opt/superset-venv"
-  pct exec $CTID -- bash -c "source /opt/superset-venv/bin/activate && pip install --upgrade pip && pip install apache-superset"
-  msg_ok "Apache Superset installed in the container"
+  pct exec $CTID -- bash -c "source /opt/superset-venv/bin/activate && pip install --upgrade pip && pip install apache-superset pillow cachelib[redis]"
+  msg_ok "Apache Superset, PIL, and Redis cache libraries installed in the container"
 
   # Générer et configurer une clé secrète sécurisée dans ~/.superset/superset_config.py
   SECRET_KEY=$(openssl rand -base64 42)
   pct exec $CTID -- mkdir -p /root/.superset
   pct exec $CTID -- bash -c "echo \"SECRET_KEY = '$SECRET_KEY'\" > /root/.superset/superset_config.py"
+
+  # Configuration de Redis comme cache pour Superset
+  pct exec $CTID -- bash -c "cat <<EOF >> /root/.superset/superset_config.py
+from cachelib.redis import RedisCache
+CACHE_CONFIG = {
+    'CACHE_TYPE': 'RedisCache',
+    'CACHE_DEFAULT_TIMEOUT': 300,
+    'CACHE_KEY_PREFIX': 'superset_',
+    'CACHE_REDIS_HOST': 'localhost',
+    'CACHE_REDIS_PORT': 6379,
+    'CACHE_REDIS_DB': 1,
+    'CACHE_REDIS_PASSWORD': None,
+}
+EOF"
+  msg_ok "Redis cache configuration added to Superset config"
 
   # Initialiser la base de données et créer l'utilisateur administrateur avec FLASK_APP configuré
   msg_info "Initializing Superset database"
@@ -98,7 +113,9 @@ EOF"
   pct exec $CTID -- systemctl daemon-reload
   pct exec $CTID -- systemctl enable superset
   pct exec $CTID -- systemctl start superset
-  msg_ok "Superset systemd service created and started in the container"
+  pct exec $CTID -- systemctl enable redis-server
+  pct exec $CTID -- systemctl start redis-server
+  msg_ok "Superset and Redis systemd services created and started in the container"
 }
 
 function motd_ssh_custom() {
