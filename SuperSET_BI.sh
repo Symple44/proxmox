@@ -61,6 +61,10 @@ function install_superset() {
   pct exec $CTID -- systemctl start redis-server
   pct exec $CTID -- bash -c "systemctl is-active --quiet redis-server && echo 'Redis is running' || (echo 'Redis failed to start'; exit 1)"
   
+  # Test de connexion Redis
+  msg_info "Testing Redis connectivity"
+  pct exec $CTID -- bash -c "redis-cli -h localhost -p 6379 ping || (echo 'Redis connection failed'; exit 1)"
+  
   msg_info "Creating Python virtual environment for Superset"
   pct exec $CTID -- bash -c "python3 -m venv /opt/superset-venv"
   pct exec $CTID -- bash -c "source /opt/superset-venv/bin/activate && pip install --upgrade pip && pip install apache-superset pillow cachelib[redis]"
