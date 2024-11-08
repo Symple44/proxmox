@@ -13,6 +13,7 @@ function header_info {
 EOF
 }
 
+header_info
 APP="Superset"
 var_disk="10"
 var_cpu="4"
@@ -48,9 +49,15 @@ function default_settings() {
 }
 
 function install_superset() {
+  header_info
   msg_info "Installing Dependencies"
   apt update
-  apt install -y build-essential libssl-dev libffi-dev python3 python3-pip python3-dev libsasl2-dev libldap2-dev libssl-dev python3-venv
+  apt install -y build-essential libssl-dev libffi-dev python3 python3-pip python3-dev libsasl2-dev libldap2-dev libssl-dev
+
+  # Détection de la version de Python et installation du package venv correspondant
+  PYTHON_VERSION=$(python3 -V | cut -d " " -f 2 | cut -d "." -f 1,2)
+  apt install -y python${PYTHON_VERSION}-venv
+  
   msg_ok "Dependencies Installed"
 
   msg_info "Installing Superset"
