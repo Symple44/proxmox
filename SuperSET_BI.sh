@@ -52,12 +52,7 @@ function install_superset() {
   header_info
   msg_info "Installing Dependencies"
   apt update
-  apt install -y build-essential libssl-dev libffi-dev python3 python3-pip python3-dev libsasl2-dev libldap2-dev libssl-dev
-
-  # Détection de la version de Python et installation du package venv correspondant
-  PYTHON_VERSION=$(python3 -V | cut -d " " -f 2 | cut -d "." -f 1,2)
-  apt install -y python${PYTHON_VERSION}-venv
-  
+  apt install -y build-essential libssl-dev libffi-dev python3 python3-pip python3-dev libsasl2-dev libldap2-dev libssl-dev python3.11-venv
   msg_ok "Dependencies Installed"
 
   msg_info "Installing Superset"
@@ -91,6 +86,7 @@ EOF
 function create_admin_user() {
   msg_info "Creating Admin User for Superset"
   source /root/superset-venv/bin/activate
+  export FLASK_APP=superset  # Définir FLASK_APP pour que Superset puisse localiser l'application
   superset fab create-admin \
       --username admin \
       --firstname Superset \
