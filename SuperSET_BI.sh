@@ -48,33 +48,11 @@ function default_settings() {
   echo_default
 }
 
-function configure_ssh_access() {
-  # Générer une paire de clés SSH si elle n'existe pas déjà
-  if [ ! -f ~/.ssh/id_rsa ]; then
-    ssh-keygen -t rsa -b 2048 -f ~/.ssh/id_rsa -N ""
-    echo "Clé SSH générée."
-  else
-    echo "Clé SSH existante trouvée."
-  fi
-
-  # Copier la clé publique dans le conteneur pour autoriser l'accès sans mot de passe
-  pct exec $CTID -- mkdir -p /root/.ssh
-  pct exec $CTID -- bash -c "echo '$(cat ~/.ssh/id_rsa.pub)' >> /root/.ssh/authorized_keys"
-  pct exec $CTID -- chmod 600 /root/.ssh/authorized_keys
-  pct exec $CTID -- chmod 700 /root/.ssh
-
-  # Configurer SSH pour autoriser l'authentification par clé publique uniquement
-  pct exec $CTID -- bash -c "echo 'PubkeyAuthentication yes' >> /etc/ssh/sshd_config"
-  pct exec $CTID -- bash -c "echo 'PermitRootLogin prohibit-password' >> /etc/ssh/sshd_config"
-  pct exec $CTID -- systemctl restart ssh
-  echo "Configuration SSH sans mot de passe appliquée."
-}
-
 function install_superset() {
   header_info
   msg_info "Installing dependencies inside the container"
   pct exec $CTID -- bash -c "apt update && apt upgrade -y"
-  pct exec $CTID -- bash -c "apt install -y build-essential libssl-dev libffi-dev python3 python3-pip python3-dev libsasl2-dev libldap2-dev libssl-dev python3.11-venv"
+  pct exec $CTID -- bash -c "apt install -y build-essential libssl-dev libffi-dev python3 python3-pip python3-dev libsasl2-dev libldap2-dev python3.11-venv"
   msg_ok "Dependencies Installed"
 
   msg_info "Creating Python virtual environment for Superset"
@@ -127,11 +105,10 @@ header_info
 start
 build_container
 install_superset
-configure_ssh_access
 description
 
 # Using the IP variable set by description function to display the final message
 msg_ok "Completed Successfully!\n"
 echo -e "${APP} should be reachable by going to the following URL:
          ${BL}http://${IP}:8088${CL} \n"
-echo -e "Authentication is disabled for automatic login."
+echo -e "Aucun accès SSH n'est nécessaire pour administrer le conteneur depuis le nœud Proxmox."
