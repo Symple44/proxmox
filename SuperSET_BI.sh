@@ -65,6 +65,9 @@ function install_superset() {
   pip install apache-superset
   msg_ok "Apache Superset installed"
 
+  # Définir FLASK_APP pour que Superset puisse trouver l'application
+  export FLASK_APP=superset
+
   msg_info "Initializing Superset database"
   superset db upgrade
   msg_ok "Database initialized"
@@ -92,6 +95,7 @@ User=root
 Group=root
 WorkingDirectory=/opt/superset-venv
 Environment="PATH=/opt/superset-venv/bin"
+Environment="FLASK_APP=superset"
 ExecStart=/opt/superset-venv/bin/gunicorn --workers 3 --timeout 120 --bind 0.0.0.0:8088 "superset.app:create_app()"
 Restart=always
 
