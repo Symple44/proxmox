@@ -8,13 +8,12 @@ source <(curl -s https://raw.githubusercontent.com/tteck/Proxmox/main/misc/build
 function header_info {
 clear
 cat <<"EOF"
-    _                                           
-   | |                                     _    
-    \ \  _   _ ____   ____  ____ ___  ____| |_  
-     \ \| | | |  _ \ / _  )/ ___)___)/ _  )  _) 
- _____) ) |_| | | | ( (/ /| |  |___ ( (/ /| |__ 
-(______/ \____| ||_/ \____)_|  (___/ \____)\___)
-              |_|                               
+    _____                              __   
+   / ___/____ ___  ____ _____  ____ _/ /__ 
+   \__ \/ __ `__ \/ __ `/ __ \/ __ `/ / _ \
+  ___/ / / / / / / /_/ / / / / /_/ / /  __/
+ /____/_/ /_/ /_/\__,_/_/ /_/\__, /_/\___/ 
+                             /____/         
 EOF
 }
 header_info
@@ -61,8 +60,8 @@ function install_superset() {
   msg_ok "Dependencies Installed"
 
   msg_info "Installing Superset"
-  python3 -m venv superset-venv
-  source superset-venv/bin/activate
+  python3 -m venv /root/superset-venv
+  source /root/superset-venv/bin/activate
   pip install apache-superset
   deactivate
   msg_ok "Superset Installed"
@@ -88,22 +87,28 @@ EOF
   msg_ok "Superset Service Configured"
 }
 
-function update_script() {
-  header_info
-  if [[ ! -d /root/superset-venv ]]; then msg_error "No ${APP} Installation Found!"; exit; fi
-  msg_info "Updating $APP (Patience)"
+function create_admin_user() {
+  msg_info "Creating Admin User for Superset"
   source /root/superset-venv/bin/activate
-  pip install --upgrade apache-superset
+  superset fab create-admin \
+      --username admin \
+      --firstname Superset \
+      --lastname Admin \
+      --email admin@example.com \
+      --password admin
   deactivate
-  systemctl restart superset
-  msg_ok "Updated $APP"
-  exit
+  msg_ok "Admin User Created (username: admin, password: admin)"
 }
 
 start
 build_container
 description
 
+# Appel de la fonction pour installer Superset et créer un utilisateur administrateur
+install_superset
+create_admin_user
+
 msg_ok "Completed Successfully!\n"
 echo -e "${APP} should be reachable by going to the following URL.
          ${BL}http://${IP}:8088${CL} \n"
+echo -e "Login with username: admin and password: admin"
