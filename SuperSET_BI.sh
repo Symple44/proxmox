@@ -136,7 +136,7 @@ function motd_ssh_custom() {
   pct exec $CTID -- bash -c "cat <<EOF >/etc/systemd/system/container-getty@1.service.d/override.conf
 [Service]
 ExecStart=
-ExecStart=-/sbin/agetty --autologin root --noclear --keep-baud tty%I 115200,38400,9600 \$TERM
+ExecStart=-/sbin/agetty --autologin root --noclear --keep-baud tty%I 115200,38400,9600 \\$TERM
 EOF"
 
   # Reload systemd and restart getty service to apply auto-login
@@ -155,4 +155,5 @@ description
 # Using the IP variable set by description function to display the final message
 msg_ok "Completed Successfully!\n"
 echo -e "${APP} should be reachable by going to the following URL:
-        
+         ${BL}http://${IP}:8088${CL} \n"
+echo -e "Aucun accès SSH n'est nécessaire pour administrer le conteneur depuis le nœud Proxmox."
