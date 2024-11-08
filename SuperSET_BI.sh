@@ -55,10 +55,20 @@ function install_superset() {
   pct exec $CTID -- bash -c "apt install -y build-essential libssl-dev libffi-dev python3 python3-pip python3-dev libsasl2-dev libldap2-dev python3.11-venv redis-server"
   msg_ok "Dependencies Installed"
 
+  # Vérification du démarrage de Redis
+  msg_info "Starting Redis service"
+  pct exec $CTID -- systemctl enable redis-server
+  pct exec $CTID -- systemctl start redis-server
+  pct exec $CTID -- bash -c "systemctl is-active --quiet redis-server && echo 'Redis is running' || (echo 'Redis failed to start'; exit 1)"
+  
   msg_info "Creating Python virtual environment for Superset"
   pct exec $CTID -- bash -c "python3 -m venv /opt/superset-venv"
   pct exec $CTID -- bash -c "source /opt/superset-venv/bin/activate && pip install --upgrade pip && pip install apache-superset pillow cachelib[redis]"
   msg_ok "Apache Superset, PIL, and Redis cache libraries installed in the container"
+
+  # Vérification de l'installation de PIL et cachelib[redis]
+  pct exec $CTID -- bash -c "source /opt/superset-venv/bin/activate && python3 -c 'import PIL; print(\"Pillow is installed\")'"
+  pct exec $CTID -- bash -c "source /opt/superset-venv/bin/activate && python3 -c 'from cachelib.redis import RedisCache; print(\"RedisCache is available\")'"
 
   # Générer et configurer une clé secrète sécurisée dans ~/.superset/superset_config.py
   SECRET_KEY=$(openssl rand -base64 42)
@@ -113,9 +123,7 @@ EOF"
   pct exec $CTID -- systemctl daemon-reload
   pct exec $CTID -- systemctl enable superset
   pct exec $CTID -- systemctl start superset
-  pct exec $CTID -- systemctl enable redis-server
-  pct exec $CTID -- systemctl start redis-server
-  msg_ok "Superset and Redis systemd services created and started in the container"
+  msg_ok "Superset systemd service created and started in the container"
 }
 
 function motd_ssh_custom() {
@@ -147,5 +155,4 @@ description
 # Using the IP variable set by description function to display the final message
 msg_ok "Completed Successfully!\n"
 echo -e "${APP} should be reachable by going to the following URL:
-         ${BL}http://${IP}:8088${CL} \n"
-echo -e "Aucun accès SSH n'est nécessaire pour administrer le conteneur depuis le nœud Proxmox."
+        
