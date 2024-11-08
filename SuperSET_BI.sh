@@ -1,13 +1,9 @@
 #!/usr/bin/env bash
 source <(curl -s https://raw.githubusercontent.com/tteck/Proxmox/main/misc/build.func)
-# Copyright (c) 2021-2024 tteck
-# Author: tteck (tteckster)
-# License: MIT
-# https://github.com/tteck/Proxmox/raw/main/LICENSE
 
 function header_info {
-clear
-cat <<"EOF"
+  clear
+  cat <<"EOF"
     _____                              __   
    / ___/____ ___  ____ _____  ____ _/ /__ 
    \__ \/ __ `__ \/ __ `/ __ \/ __ `/ / _ \
@@ -16,8 +12,7 @@ cat <<"EOF"
                              /____/         
 EOF
 }
-header_info
-echo -e "Loading..."
+
 APP="Superset"
 var_disk="10"
 var_cpu="4"
@@ -53,7 +48,6 @@ function default_settings() {
 }
 
 function install_superset() {
-  header_info
   msg_info "Installing Dependencies"
   apt update
   apt install -y build-essential libssl-dev libffi-dev python3 python3-pip python3-dev libsasl2-dev libldap2-dev libssl-dev python3-venv
@@ -100,15 +94,15 @@ function create_admin_user() {
   msg_ok "Admin User Created (username: admin, password: admin)"
 }
 
+header_info
 start
 build_container
 description
 
-# Appel de la fonction pour installer Superset et créer un utilisateur administrateur
 install_superset
 create_admin_user
 
 msg_ok "Completed Successfully!\n"
-echo -e "${APP} should be reachable by going to the following URL.
+echo -e "${APP} should be reachable by going to the following URL:
          ${BL}http://${IP}:8088${CL} \n"
 echo -e "Login with username: admin and password: admin"
