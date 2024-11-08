@@ -8,18 +8,20 @@ source <(curl -s https://raw.githubusercontent.com/tteck/Proxmox/main/misc/build
 function header_info {
 clear
 cat <<"EOF"
-   _____  ____  ____  _____ 
-  / ___/ / __ \/ __ \/ ___/
- / /__  / /_/ / / / /\__ \ 
- \___/  \____/_/ /_//___/ 
-
+    _                                           
+   | |                                     _    
+    \ \  _   _ ____   ____  ____ ___  ____| |_  
+     \ \| | | |  _ \ / _  )/ ___)___)/ _  )  _) 
+ _____) ) |_| | | | ( (/ /| |  |___ ( (/ /| |__ 
+(______/ \____| ||_/ \____)_|  (___/ \____)\___)
+              |_|                               
 EOF
 }
 header_info
 echo -e "Loading..."
 APP="Superset"
-var_disk="40"
-var_cpu="2"
+var_disk="10"
+var_cpu="4"
 var_ram="4096"
 var_os="debian"
 var_version="12"
@@ -30,7 +32,7 @@ catch_errors
 function default_settings() {
   CT_TYPE="1"
   PW=""
-  CT_ID=$NEXTID  # Correction : CT_ID est défini ici
+  CT_ID=$NEXTID
   HN=$NSAPP
   DISK_SIZE="$var_disk"
   CORE_COUNT="$var_cpu"
@@ -51,45 +53,51 @@ function default_settings() {
   echo_default
 }
 
-function install_superset {
-  msg_info "Installation de Superset (cela peut prendre un certain temps)"
-  bash -c "
-    apt update -y && \
-    apt install -y python3 python3-pip libpq-dev build-essential libssl-dev libffi-dev python3-dev python3-venv && \
-    python3 -m venv venv && \
-    source venv/bin/activate && \
-    pip install apache-superset && \
-    superset db upgrade && \
-    export FLASK_APP=superset && \
-    flask fab create-admin --username admin --firstname admin --lastname admin --email admin@example.com --password admin && \
-    superset init && \
-    deactivate
-  "
-  msg_ok "Superset installé avec succès"
+function install_superset() {
+  header_info
+  msg_info "Installing Dependencies"
+  apt update
+  apt install -y build-essential libssl-dev libffi-dev python3 python3-pip python3-dev libsasl2-dev libldap2-dev libssl-dev
+  msg_ok "Dependencies Installed"
+
+  msg_info "Installing Superset"
+  python3 -m venv superset-venv
+  source superset-venv/bin/activate
+  pip install apache-superset
+  deactivate
+  msg_ok "Superset Installed"
+
+  msg_info "Setting up Superset Service"
+  cat <<EOF >/etc/systemd/system/superset.service
+[Unit]
+Description=Apache Superset
+After=network.target
+
+[Service]
+User=root
+Group=root
+WorkingDirectory=/root/superset-venv
+ExecStart=/root/superset-venv/bin/superset run -p 8088 --with-threads --reload --debugger
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+EOF
+  systemctl enable superset
+  systemctl start superset
+  msg_ok "Superset Service Configured"
 }
 
-function build_container() {
-  # Vérifier si un conteneur avec le même nom existe déjà
-  if [[ $(pct list | grep -c "$CT_ID") -ne 0 ]]; then  # Correction : Utilisation de CT_ID
-    msg_error "Un conteneur avec l'ID $CT_ID existe déjà."
-    exit 1
-  fi
-
-  # Créer le conteneur LXC
-  pct create $CT_ID \   # Correction : Utilisation de CT_ID
-    -hostname $HN \
-    -net0 name=eth0,bridge=$BRG,gw=$GATE,hwaddr=$MAC,ip=$NET,mtu=$MTU,tag=$VLAN,type=veth \
-    -ostype $var_os \
-    -rootfs local-lvm,size=$DISK_SIZE,ssd=$SD \
-    -cpulimit $CPULIMIT \
-    -cores $CORE_COUNT \
-    -memory $RAM_SIZE \
-    -onboot 1 \
-    -protection 1 \
-    -unique 1 \
-    -unprivileged 0
-
-  # ... (reste de la fonction inchangé) ...
+function update_script() {
+  header_info
+  if [[ ! -d /root/superset-venv ]]; then msg_error "No ${APP} Installation Found!"; exit; fi
+  msg_info "Updating $APP (Patience)"
+  source /root/superset-venv/bin/activate
+  pip install --upgrade apache-superset
+  deactivate
+  systemctl restart superset
+  msg_ok "Updated $APP"
+  exit
 }
 
 start
