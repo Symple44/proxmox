@@ -96,10 +96,10 @@ EOF
 header_info
 start
 build_container
-description
-
 install_superset
+description  # Appel de la fonction description après install_superset
 
+# Utilisation de l'adresse IP récupérée par la fonction description()
 msg_ok "Completed Successfully!\n"
 echo -e "${APP} should be reachable by going to the following URL:
          ${BL}http://${IP}:8088${CL} \n"
