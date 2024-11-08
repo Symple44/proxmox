@@ -101,10 +101,30 @@ EOF"
   msg_ok "Superset systemd service created and started in the container"
 }
 
+function motd_ssh_custom() {
+  msg_info "Customizing MOTD and SSH access"
+  # Customize MOTD with Superset specific message
+  pct exec $CTID -- bash -c "echo 'Welcome to your Superset LXC container!' > /etc/motd"
+  
+  # Set up auto-login for root on tty1
+  pct exec $CTID -- mkdir -p /etc/systemd/system/container-getty@1.service.d
+  pct exec $CTID -- bash -c "cat <<EOF >/etc/systemd/system/container-getty@1.service.d/override.conf
+[Service]
+ExecStart=
+ExecStart=-/sbin/agetty --autologin root --noclear --keep-baud tty%I 115200,38400,9600 \$TERM
+EOF"
+
+  # Reload systemd and restart getty service to apply auto-login
+  pct exec $CTID -- systemctl daemon-reload
+  pct exec $CTID -- systemctl restart container-getty@1.service
+  msg_ok "MOTD and SSH access customized"
+}
+
 header_info
 start
 build_container
 install_superset
+motd_ssh_custom
 description
 
 # Using the IP variable set by description function to display the final message
