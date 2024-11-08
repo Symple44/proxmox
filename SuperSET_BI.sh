@@ -43,7 +43,7 @@ function default_settings() {
   NS=""
   MAC=""
   VLAN=""
-  SSH="yes"  # Activer SSH pour le conteneur
+  SSH="yes"
   VERB="no"
   echo_default
 }
@@ -72,52 +72,34 @@ function configure_ssh_access() {
 
 function install_superset() {
   header_info
-  msg_info "Updating system and installing dependencies"
-  apt update && apt upgrade -y
-  apt install -y build-essential libssl-dev libffi-dev python3 python3-pip python3-dev libsasl2-dev libldap2-dev libssl-dev python3.11-venv
+  msg_info "Installing dependencies inside the container"
+  pct exec $CTID -- bash -c "apt update && apt upgrade -y"
+  pct exec $CTID -- bash -c "apt install -y build-essential libssl-dev libffi-dev python3 python3-pip python3-dev libsasl2-dev libldap2-dev libssl-dev python3.11-venv"
   msg_ok "Dependencies Installed"
 
   msg_info "Creating Python virtual environment for Superset"
-  python3 -m venv /opt/superset-venv
-  source /opt/superset-venv/bin/activate
-  msg_ok "Python virtual environment created and activated"
-
-  msg_info "Updating pip and installing Apache Superset"
-  pip install --upgrade pip
-  pip install apache-superset
-  msg_ok "Apache Superset installed"
+  pct exec $CTID -- bash -c "python3 -m venv /opt/superset-venv"
+  pct exec $CTID -- bash -c "source /opt/superset-venv/bin/activate && pip install --upgrade pip && pip install apache-superset"
+  msg_ok "Apache Superset installed in the container"
 
   # Générer et configurer une clé secrète sécurisée dans ~/.superset/superset_config.py
   SECRET_KEY=$(openssl rand -base64 42)
-  mkdir -p /root/.superset
-  cat <<EOF >/root/.superset/superset_config.py
-# Configuration sécurisée de Superset
-SECRET_KEY = "$SECRET_KEY"
-EOF
+  pct exec $CTID -- mkdir -p /root/.superset
+  pct exec $CTID -- bash -c "echo \"SECRET_KEY = '$SECRET_KEY'\" > /root/.superset/superset_config.py"
 
-  # Définir les variables d'environnement pour la configuration
-  export FLASK_APP=superset
-  export SUPERSET_CONFIG_PATH=/root/.superset/superset_config.py
-  msg_ok "Secure SECRET_KEY configured in /root/.superset/superset_config.py"
-
+  # Initialiser la base de données et créer l'utilisateur administrateur
   msg_info "Initializing Superset database"
-  superset db upgrade
-  msg_ok "Database initialized"
+  pct exec $CTID -- bash -c "export FLASK_APP=superset && export SUPERSET_CONFIG_PATH=/root/.superset/superset_config.py && source /opt/superset-venv/bin/activate && superset db upgrade"
+  pct exec $CTID -- bash -c "source /opt/superset-venv/bin/activate && superset fab create-admin --username admin --firstname Admin --lastname User --email admin@example.com --password admin"
+  msg_ok "Database initialized and admin user created"
 
-  msg_info "Creating admin user for Superset"
-  superset fab create-admin --username admin --firstname Admin --lastname User --email admin@example.com --password admin
-  msg_ok "Admin user created"
-
-  msg_info "Loading example data"
-  superset load_examples
+  # Charger les exemples de données
+  pct exec $CTID -- bash -c "source /opt/superset-venv/bin/activate && superset load_examples"
   msg_ok "Example data loaded"
 
-  msg_info "Configuring Superset to use Gunicorn"
-  pip install gunicorn
-  msg_ok "Gunicorn installed"
-
-  msg_info "Creating systemd service for Superset"
-  cat <<EOF >/etc/systemd/system/superset.service
+  # Configurer le service systemd pour Superset
+  msg_info "Creating systemd service for Superset in the container"
+  pct exec $CTID -- bash -c "cat <<EOF >/etc/systemd/system/superset.service
 [Unit]
 Description=Apache Superset
 After=network.target
@@ -126,26 +108,26 @@ After=network.target
 User=root
 Group=root
 WorkingDirectory=/opt/superset-venv
-Environment="PATH=/opt/superset-venv/bin"
-Environment="FLASK_APP=superset"
-Environment="SUPERSET_CONFIG_PATH=/root/.superset/superset_config.py"
-ExecStart=/opt/superset-venv/bin/gunicorn --workers 3 --timeout 120 --bind 0.0.0.0:8088 "superset.app:create_app()"
+Environment=\"PATH=/opt/superset-venv/bin\"
+Environment=\"FLASK_APP=superset\"
+Environment=\"SUPERSET_CONFIG_PATH=/root/.superset/superset_config.py\"
+ExecStart=/opt/superset-venv/bin/gunicorn --workers 3 --timeout 120 --bind 0.0.0.0:8088 \"superset.app:create_app()\"
 Restart=always
 
 [Install]
 WantedBy=multi-user.target
-EOF
-  systemctl daemon-reload
-  systemctl enable superset
-  systemctl start superset
-  msg_ok "Superset systemd service created and started"
+EOF"
+  pct exec $CTID -- systemctl daemon-reload
+  pct exec $CTID -- systemctl enable superset
+  pct exec $CTID -- systemctl start superset
+  msg_ok "Superset systemd service created and started in the container"
 }
 
 header_info
 start
 build_container
 install_superset
-configure_ssh_access  # Configuration de l'accès SSH sans mot de passe
+configure_ssh_access
 description
 
 # Using the IP variable set by description function to display the final message
