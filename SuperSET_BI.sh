@@ -87,14 +87,14 @@ function install_superset() {
   pct exec $CTID -- mkdir -p /root/.superset
   pct exec $CTID -- bash -c "echo \"SECRET_KEY = '$SECRET_KEY'\" > /root/.superset/superset_config.py"
 
-  # Initialiser la base de données et créer l'utilisateur administrateur
+  # Initialiser la base de données et créer l'utilisateur administrateur avec FLASK_APP configuré
   msg_info "Initializing Superset database"
   pct exec $CTID -- bash -c "export FLASK_APP=superset && export SUPERSET_CONFIG_PATH=/root/.superset/superset_config.py && source /opt/superset-venv/bin/activate && superset db upgrade"
-  pct exec $CTID -- bash -c "source /opt/superset-venv/bin/activate && superset fab create-admin --username admin --firstname Admin --lastname User --email admin@example.com --password admin"
+  pct exec $CTID -- bash -c "export FLASK_APP=superset && export SUPERSET_CONFIG_PATH=/root/.superset/superset_config.py && source /opt/superset-venv/bin/activate && superset fab create-admin --username admin --firstname Admin --lastname User --email admin@example.com --password admin"
   msg_ok "Database initialized and admin user created"
 
-  # Charger les exemples de données
-  pct exec $CTID -- bash -c "source /opt/superset-venv/bin/activate && superset load_examples"
+  # Charger les exemples de données avec FLASK_APP configuré
+  pct exec $CTID -- bash -c "export FLASK_APP=superset && export SUPERSET_CONFIG_PATH=/root/.superset/superset_config.py && source /opt/superset-venv/bin/activate && superset load_examples"
   msg_ok "Example data loaded"
 
   # Configurer le service systemd pour Superset
