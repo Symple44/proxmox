@@ -62,6 +62,16 @@ function install_superset() {
   deactivate
   msg_ok "Superset Installed"
 
+  msg_info "Configuring Superset for Automatic Login and Secure SECRET_KEY"
+  # Générer une clé secrète et configurer le fichier de configuration de Superset
+  SECRET_KEY=$(openssl rand -base64 42)
+  cat <<EOF >/root/superset-venv/lib/python3.11/site-packages/superset_config.py
+# Configuration de Superset avec une clé secrète sécurisée et l'authentification désactivée
+SECRET_KEY = "$SECRET_KEY"
+AUTH_TYPE = 0  # No Auth pour accès automatique
+EOF
+  msg_ok "Superset Configured with Secure SECRET_KEY"
+
   msg_info "Setting up Superset Service"
   cat <<EOF >/etc/systemd/system/superset.service
 [Unit]
@@ -83,29 +93,14 @@ EOF
   msg_ok "Superset Service Configured"
 }
 
-function create_admin_user() {
-  msg_info "Creating Admin User for Superset"
-  source /root/superset-venv/bin/activate
-  export FLASK_APP=superset  # Définir FLASK_APP pour que Superset puisse localiser l'application
-  superset fab create-admin \
-      --username admin \
-      --firstname Superset \
-      --lastname Admin \
-      --email admin@example.com \
-      --password admin
-  deactivate
-  msg_ok "Admin User Created (username: admin, password: admin)"
-}
-
 header_info
 start
 build_container
 description
 
 install_superset
-create_admin_user
 
 msg_ok "Completed Successfully!\n"
 echo -e "${APP} should be reachable by going to the following URL:
          ${BL}http://${IP}:8088${CL} \n"
-echo -e "Login with username: admin and password: admin"
+echo -e "Authentication is disabled for automatic login."
