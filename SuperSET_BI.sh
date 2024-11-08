@@ -11,7 +11,7 @@ cat <<"EOF"
     _____                              __   
    / ___/____ ___  ____ _____  ____ _/ /__ 
    \__ \/ __ `__ \/ __ `/ __ \/ __ `/ / _ \
-  ___/ / / / / / / /_/ / / / / /_/ / /  __/
+  ___/ / / / / / /_/ / / / / / /_/ / /  __/
  /____/_/ /_/ /_/\__,_/_/ /_/\__, /_/\___/ 
                              /____/         
 EOF
@@ -56,7 +56,7 @@ function install_superset() {
   header_info
   msg_info "Installing Dependencies"
   apt update
-  apt install -y build-essential libssl-dev libffi-dev python3 python3-pip python3-dev libsasl2-dev libldap2-dev libssl-dev
+  apt install -y build-essential libssl-dev libffi-dev python3 python3-pip python3-dev libsasl2-dev libldap2-dev libssl-dev python3-venv
   msg_ok "Dependencies Installed"
 
   msg_info "Installing Superset"
