@@ -43,9 +43,31 @@ function default_settings() {
   NS=""
   MAC=""
   VLAN=""
-  SSH="no"
+  SSH="yes"  # Activer SSH pour le conteneur
   VERB="no"
   echo_default
+}
+
+function configure_ssh_access() {
+  # Générer une paire de clés SSH si elle n'existe pas déjà
+  if [ ! -f ~/.ssh/id_rsa ]; then
+    ssh-keygen -t rsa -b 2048 -f ~/.ssh/id_rsa -N ""
+    echo "Clé SSH générée."
+  else
+    echo "Clé SSH existante trouvée."
+  fi
+
+  # Copier la clé publique dans le conteneur pour autoriser l'accès sans mot de passe
+  pct exec $CTID -- mkdir -p /root/.ssh
+  pct exec $CTID -- bash -c "echo '$(cat ~/.ssh/id_rsa.pub)' >> /root/.ssh/authorized_keys"
+  pct exec $CTID -- chmod 600 /root/.ssh/authorized_keys
+  pct exec $CTID -- chmod 700 /root/.ssh
+
+  # Configurer SSH pour autoriser l'authentification par clé publique uniquement
+  pct exec $CTID -- bash -c "echo 'PubkeyAuthentication yes' >> /etc/ssh/sshd_config"
+  pct exec $CTID -- bash -c "echo 'PermitRootLogin prohibit-password' >> /etc/ssh/sshd_config"
+  pct exec $CTID -- systemctl restart ssh
+  echo "Configuration SSH sans mot de passe appliquée."
 }
 
 function install_superset() {
@@ -123,6 +145,7 @@ header_info
 start
 build_container
 install_superset
+configure_ssh_access  # Configuration de l'accès SSH sans mot de passe
 description
 
 # Using the IP variable set by description function to display the final message
