@@ -50,29 +50,38 @@ function default_settings() {
 
 function install_superset() {
   header_info
-  msg_info "Installing Dependencies"
-  apt update
+  msg_info "Updating system and installing dependencies"
+  apt update && apt upgrade -y
   apt install -y build-essential libssl-dev libffi-dev python3 python3-pip python3-dev libsasl2-dev libldap2-dev libssl-dev python3.11-venv
   msg_ok "Dependencies Installed"
 
-  msg_info "Installing Superset"
-  python3 -m venv /root/superset-venv
-  source /root/superset-venv/bin/activate
+  msg_info "Creating Python virtual environment for Superset"
+  python3 -m venv /opt/superset-venv
+  source /opt/superset-venv/bin/activate
+  msg_ok "Python virtual environment created and activated"
+
+  msg_info "Updating pip and installing Apache Superset"
+  pip install --upgrade pip
   pip install apache-superset
-  deactivate
-  msg_ok "Superset Installed"
+  msg_ok "Apache Superset installed"
 
-  msg_info "Configuring Superset for Automatic Login and Secure SECRET_KEY"
-  # Générer une clé secrète et configurer le fichier de configuration de Superset
-  SECRET_KEY=$(openssl rand -base64 42)
-  cat <<EOF >/root/superset-venv/lib/python3.11/site-packages/superset_config.py
-# Configuration de Superset avec une clé secrète sécurisée et l'authentification désactivée
-SECRET_KEY = "$SECRET_KEY"
-AUTH_TYPE = 0  # No Auth pour accès automatique
-EOF
-  msg_ok "Superset Configured with Secure SECRET_KEY"
+  msg_info "Initializing Superset database"
+  superset db upgrade
+  msg_ok "Database initialized"
 
-  msg_info "Setting up Superset Service"
+  msg_info "Creating admin user for Superset"
+  superset fab create-admin --username admin --firstname Admin --lastname User --email admin@example.com --password admin
+  msg_ok "Admin user created"
+
+  msg_info "Loading example data"
+  superset load_examples
+  msg_ok "Example data loaded"
+
+  msg_info "Configuring Superset to use Gunicorn"
+  pip install gunicorn
+  msg_ok "Gunicorn installed"
+
+  msg_info "Creating systemd service for Superset"
   cat <<EOF >/etc/systemd/system/superset.service
 [Unit]
 Description=Apache Superset
@@ -81,25 +90,27 @@ After=network.target
 [Service]
 User=root
 Group=root
-WorkingDirectory=/root/superset-venv
-ExecStart=/root/superset-venv/bin/superset run -p 8088 --with-threads --reload --debugger
+WorkingDirectory=/opt/superset-venv
+Environment="PATH=/opt/superset-venv/bin"
+ExecStart=/opt/superset-venv/bin/gunicorn --workers 3 --timeout 120 --bind 0.0.0.0:8088 "superset.app:create_app()"
 Restart=always
 
 [Install]
 WantedBy=multi-user.target
 EOF
+  systemctl daemon-reload
   systemctl enable superset
   systemctl start superset
-  msg_ok "Superset Service Configured"
+  msg_ok "Superset systemd service created and started"
 }
 
 header_info
 start
 build_container
 install_superset
-description  # Appel de la fonction description après install_superset
+description
 
-# Utilisation de l'adresse IP récupérée par la fonction description()
+# Using the IP variable set by description function to display the final message
 msg_ok "Completed Successfully!\n"
 echo -e "${APP} should be reachable by going to the following URL:
          ${BL}http://${IP}:8088${CL} \n"
