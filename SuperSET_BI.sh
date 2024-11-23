@@ -133,7 +133,6 @@ function motd_ssh_custom() {
 }
 
 header_info
-default_settings
 install_superset
 motd_ssh_custom
 description
