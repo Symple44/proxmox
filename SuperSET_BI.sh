@@ -52,31 +52,53 @@ function install_superset() {
   header_info
   msg_info "Installing dependencies inside the container"
 
-  # Mise à jour et installation des dépendances de base
+  # Mise à jour des paquets système
   pct exec $CTID -- bash -c "apt update && apt upgrade -y"
+  if [ $? -ne 0 ]; then
+    msg_error "Failed to update and upgrade packages"
+    exit 1
+  fi
+
+  # Installation des dépendances système
   pct exec $CTID -- bash -c "apt install -y build-essential libssl-dev libffi-dev python3 python3-pip python3-dev \
-    libsasl2-dev libldap2-dev python3.11-venv redis-server mariadb-client mariadb-server libmariadb-dev libmariadb-dev-compat"
+    libsasl2-dev libldap2-dev python3.11-venv redis-server libpq-dev mariadb-client mariadb-server libmariadb-dev libmariadb-dev-compat"
+  if [ $? -ne 0 ]; then
+    msg_error "Failed to install system dependencies"
+    exit 1
+  fi
 
   # Vérification de Redis
   msg_info "Starting Redis service"
   pct exec $CTID -- bash -c "systemctl enable redis-server && systemctl start redis-server"
   pct exec $CTID -- bash -c "systemctl is-active --quiet redis-server && echo 'Redis is running' || (echo 'Redis failed to start'; exit 1)"
   pct exec $CTID -- bash -c "redis-cli -h localhost -p 6379 ping || (echo 'Redis connection failed'; exit 1)"
+  if [ $? -ne 0 ]; then
+    msg_error "Redis setup failed"
+    exit 1
+  fi
   msg_ok "Redis service is running and responsive"
 
   # Création de l'environnement virtuel Python
   msg_info "Creating Python virtual environment for Superset"
   pct exec $CTID -- bash -c "python3 -m venv /opt/superset-venv"
   pct exec $CTID -- bash -c "source /opt/superset-venv/bin/activate && pip install --upgrade pip setuptools wheel"
+  if [ $? -ne 0 ]; then
+    msg_error "Failed to create or upgrade Python virtual environment"
+    exit 1
+  fi
   msg_ok "Python virtual environment created successfully"
 
   # Installation de Superset et des bibliothèques nécessaires
   msg_info "Installing Superset and related libraries"
   pct exec $CTID -- bash -c "source /opt/superset-venv/bin/activate && \
-    MYSQLCLIENT_CFLAGS='-I/usr/include/mariadb' MYSQLCLIENT_LDFLAGS='-L/usr/lib/x86_64-linux-gnu/' pip install apache-superset pillow cachelib[redis] mysqlclient"
+    pip install apache-superset pillow cachelib[redis] mysqlclient psycopg2-binary"
+  if [ $? -ne 0 ]; then
+    msg_error "Failed to install Superset and required libraries"
+    exit 1
+  fi
   msg_ok "Superset and related libraries installed successfully"
 
-  # Génération d'une clé SECRET_KEY
+  # Génération d'une clé SECRET_KEY sécurisée
   msg_info "Configuring Superset"
   SECRET_KEY=$(openssl rand -base64 42)
   pct exec $CTID -- bash -c "mkdir -p /root/.superset"
@@ -86,7 +108,7 @@ from cachelib.redis import RedisCache
 # Clé secrète pour sécuriser les sessions
 SECRET_KEY = '$SECRET_KEY'
 
-# Exemple de configuration pour PostgreSQL (par défaut)
+# Exemple de configuration pour PostgreSQL
 SQLALCHEMY_DATABASE_URI = 'postgresql+psycopg2://superset_user:votre_mot_de_passe@localhost/superset'
 
 # Exemple de configuration pour MySQL
@@ -109,22 +131,41 @@ SUPERSET_WEBSERVER_TIMEOUT = 60
 # Configuration Mapbox (optionnel, ajouter une clé API si nécessaire)
 MAPBOX_API_KEY = ''
 EOF"
+  if [ $? -ne 0 ]; then
+    msg_error "Failed to create Superset configuration"
+    exit 1
+  fi
   msg_ok "Superset configuration created with a secure SECRET_KEY"
 
   # Initialisation de la base de données
   msg_info "Initializing Superset database"
-  pct exec $CTID -- bash -c "source /opt/superset-venv/bin/activate && export FLASK_APP=superset && export SUPERSET_CONFIG_PATH=/root/.superset/superset_config.py && superset db upgrade"
+  pct exec $CTID -- bash -c "source /opt/superset-venv/bin/activate && \
+    export FLASK_APP=superset && export SUPERSET_CONFIG_PATH=/root/.superset/superset_config.py && superset db upgrade"
+  if [ $? -ne 0 ]; then
+    msg_error "Failed to initialize Superset database"
+    exit 1
+  fi
   msg_ok "Superset database initialized successfully"
 
   # Création de l'utilisateur administrateur
   msg_info "Creating admin user for Superset"
-  pct exec $CTID -- bash -c "source /opt/superset-venv/bin/activate && export FLASK_APP=superset && export SUPERSET_CONFIG_PATH=/root/.superset/superset_config.py && superset fab create-admin \
+  pct exec $CTID -- bash -c "source /opt/superset-venv/bin/activate && \
+    export FLASK_APP=superset && export SUPERSET_CONFIG_PATH=/root/.superset/superset_config.py && superset fab create-admin \
     --username admin --firstname Admin --lastname User --email admin@example.com --password admin"
+  if [ $? -ne 0 ]; then
+    msg_error "Failed to create admin user"
+    exit 1
+  fi
   msg_ok "Admin user created successfully"
 
   # Chargement des exemples de données
   msg_info "Loading example data into Superset"
-  pct exec $CTID -- bash -c "source /opt/superset-venv/bin/activate && export FLASK_APP=superset && export SUPERSET_CONFIG_PATH=/root/.superset/superset_config.py && superset load_examples"
+  pct exec $CTID -- bash -c "source /opt/superset-venv/bin/activate && \
+    export FLASK_APP=superset && export SUPERSET_CONFIG_PATH=/root/.superset/superset_config.py && superset load_examples"
+  if [ $? -ne 0 ]; then
+    msg_error "Failed to load example data"
+    exit 1
+  fi
   msg_ok "Example data loaded into Superset"
 
   # Configuration du service systemd
@@ -148,8 +189,13 @@ Restart=always
 WantedBy=multi-user.target
 EOF"
   pct exec $CTID -- bash -c "systemctl daemon-reload && systemctl enable superset && systemctl start superset"
+  if [ $? -ne 0 ]; then
+    msg_error "Failed to create and start Superset systemd service"
+    exit 1
+  fi
   msg_ok "Superset systemd service created and started successfully"
 }
+
 
 function motd_ssh_custom() {
   msg_info "Customizing MOTD and SSH access"
