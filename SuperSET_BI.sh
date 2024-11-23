@@ -17,19 +17,28 @@ EOF
 
 header_info
 
-# Initialisation explicite des variables critiques pour éviter les erreurs
-HOLD=""  # Ajout explicite pour éviter les erreurs liées à HOLD
-
 APP="Superset"
-var_disk="10"
-var_cpu="4"
-var_ram="4096"
+var_disk="10"       # Taille du disque en Go
+var_cpu="4"         # Nombre de cœurs
+var_ram="4096"      # RAM en Mo
 var_os="debian"
 var_version="12"
 
-variables
-color
-catch_errors
+function default_settings() {
+  # Initialisation des variables par défaut
+  CT_TYPE="1"                     # Type de conteneur : 1 = Unprivileged
+  PW=""                           # Pas de mot de passe root
+  CT_ID=$NEXTID                   # Identifiant du conteneur généré automatiquement
+  HN=$NSAPP                       # Nom d'hôte basé sur l'application
+  DISK_SIZE="$var_disk"           # Taille du disque
+  CORE_COUNT="$var_cpu"           # Nombre de cœurs
+  RAM_SIZE="$var_ram"             # Taille de la RAM
+  BRG="vmbr0"                     # Pont réseau par défaut
+  NET="dhcp"                      # Utilisation de DHCP
+  DISABLEIP6="no"                 # IPv6 activé par défaut
+  SSH="yes"                       # SSH activé
+  echo_default
+}
 
 function echo_default() {
   echo "Using Default Settings"
@@ -41,20 +50,17 @@ function echo_default() {
   echo "Using Hostname: $HN"
   echo "Using Disk Size: ${DISK_SIZE}GB"
   echo "Allocated Cores $CORE_COUNT"
-  echo "Allocated Ram $RAM_SIZE"
+  echo "Allocated Ram $RAM_SIZE MB"
   echo "Using Bridge: $BRG"
   echo "Using Static IP Address: $NET"
-  echo "Using Gateway IP Address: ${GATE:-Default}"
-  echo "Using Apt-Cacher IP Address: ${APT_CACHER_IP:-Default}"
   echo "Disable IPv6: $DISABLEIP6"
-  echo "Using Interface MTU Size: ${MTU:-Default}"
-  echo "Using DNS Search Domain: ${SD:-Host}"
-  echo "Using DNS Server Address: ${NS:-Host}"
-  echo "Using MAC Address: ${MAC:-Default}"
-  echo "Using VLAN Tag: ${VLAN:-Default}"
   echo "Enable Root SSH Access: $SSH"
-  echo "Enable Verbose Mode: $VERB"
 }
+
+variables
+color
+catch_errors
+default_settings
 
 function install_superset() {
   header_info
