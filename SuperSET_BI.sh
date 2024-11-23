@@ -55,7 +55,7 @@ function install_superset() {
   # Mise à jour et installation des dépendances de base
   pct exec $CTID -- bash -c "apt update && apt upgrade -y"
   pct exec $CTID -- bash -c "apt install -y build-essential libssl-dev libffi-dev python3 python3-pip python3-dev \
-    libsasl2-dev libldap2-dev python3.11-venv redis-server libmariadb-dev libmariadb-dev-compat"
+    libsasl2-dev libldap2-dev python3.11-venv redis-server mariadb-client mariadb-server libmariadb-dev libmariadb-dev-compat"
 
   # Vérification de Redis
   msg_info "Starting Redis service"
@@ -72,7 +72,8 @@ function install_superset() {
 
   # Installation de Superset et des bibliothèques nécessaires
   msg_info "Installing Superset and related libraries"
-  pct exec $CTID -- bash -c "source /opt/superset-venv/bin/activate && pip install apache-superset pillow cachelib[redis] mysqlclient"
+  pct exec $CTID -- bash -c "source /opt/superset-venv/bin/activate && \
+    MYSQLCLIENT_CFLAGS='-I/usr/include/mariadb' MYSQLCLIENT_LDFLAGS='-L/usr/lib/x86_64-linux-gnu/' pip install apache-superset pillow cachelib[redis] mysqlclient"
   msg_ok "Superset and related libraries installed successfully"
 
   # Configuration de Superset
@@ -149,7 +150,6 @@ EOF"
   pct exec $CTID -- bash -c "systemctl daemon-reload && systemctl enable superset && systemctl start superset"
   msg_ok "Superset systemd service created and started successfully"
 }
-
 
 
 function motd_ssh_custom() {
