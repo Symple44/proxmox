@@ -1,11 +1,30 @@
 #!/usr/bin/env bash
+
+# Initialisation explicite de la variable HOLD
+HOLD="${HOLD:-}"
+
+# Charger le fichier d'assistance
 source <(curl -s https://raw.githubusercontent.com/tteck/Proxmox/main/misc/build.func)
 
 set -e  # Arrêter le script en cas d'erreur
 set -u  # Erreur si une variable non initialisée est utilisée
 set -o pipefail  # Arrêter si une commande dans un pipeline échoue
 
-# Initialisation explicite de toutes les variables globales
+function header_info {
+  clear
+  cat <<"EOF"
+    _____                              __   
+   / ___/____ ___  ____ _____  ____ _/ /__ 
+   \__ \/ __ `__ \/ __ `/ __ \/ __ `/ / _ \
+  ___/ / / / / / /_/ / / / / / /_/ / /  __/
+ /____/_/ /_/ /_/\__,_/_/ /_/\__, /_/\___/ 
+                             /____/         
+EOF
+}
+
+header_info
+
+# Variables globales avec initialisation explicite
 APP="Superset"
 var_disk="10"
 var_cpu="4"
@@ -32,21 +51,6 @@ MAC="${MAC:-}"
 VLAN="${VLAN:-}"
 SSH="yes"
 VERB="no"
-HOLD="${HOLD:-}"  # Ajout d'une initialisation pour HOLD
-
-function header_info {
-  clear
-  cat <<"EOF"
-    _____                              __   
-   / ___/____ ___  ____ _____  ____ _/ /__ 
-   \__ \/ __ `__ \/ __ `/ __ \/ __ `/ / _ \
-  ___/ / / / / / /_/ / / / / / /_/ / /  __/
- /____/_/ /_/ /_/\__,_/_/ /_/\__, /_/\___/ 
-                             /____/         
-EOF
-}
-
-header_info
 
 # Affichage des paramètres par défaut
 function echo_default() {
