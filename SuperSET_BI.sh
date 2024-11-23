@@ -47,7 +47,31 @@ function default_settings() {
   VLAN="${VLAN:-}"
   SSH="yes"
   VERB="no"
-  echo_default
+}
+
+function echo_default() {
+  echo "Using Default Settings"
+  echo "Using Distribution: $var_os"
+  echo "Using $var_os Version: $var_version"
+  echo "Using Container Type: $CT_TYPE"
+  echo "Using Root Password: ${PW:-Automatic Login}"
+  echo "Using Container ID: $CT_ID"
+  echo "Using Hostname: $HN"
+  echo "Using Disk Size: ${DISK_SIZE}GB"
+  echo "Allocated Cores $CORE_COUNT"
+  echo "Allocated Ram $RAM_SIZE"
+  echo "Using Bridge: $BRG"
+  echo "Using Static IP Address: $NET"
+  echo "Using Gateway IP Address: ${GATE:-Default}"
+  echo "Using Apt-Cacher IP Address: ${APT_CACHER_IP:-Default}"
+  echo "Disable IPv6: $DISABLEIP6"
+  echo "Using Interface MTU Size: ${MTU:-Default}"
+  echo "Using DNS Search Domain: ${SD:-Host}"
+  echo "Using DNS Server Address: ${NS:-Host}"
+  echo "Using MAC Address: ${MAC:-Default}"
+  echo "Using VLAN Tag: ${VLAN:-Default}"
+  echo "Enable Root SSH Access: $SSH"
+  echo "Enable Verbose Mode: $VERB"
 }
 
 function install_superset() {
@@ -133,6 +157,7 @@ header_info
 start
 build_container
 default_settings
+echo_default
 install_superset
 motd_ssh_custom
 description
