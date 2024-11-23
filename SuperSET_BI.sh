@@ -76,7 +76,7 @@ function install_superset() {
     MYSQLCLIENT_CFLAGS='-I/usr/include/mariadb' MYSQLCLIENT_LDFLAGS='-L/usr/lib/x86_64-linux-gnu/' pip install apache-superset pillow cachelib[redis] mysqlclient"
   msg_ok "Superset and related libraries installed successfully"
 
-  # Configuration de Superset
+  # Génération d'une clé SECRET_KEY
   msg_info "Configuring Superset"
   SECRET_KEY=$(openssl rand -base64 42)
   pct exec $CTID -- bash -c "mkdir -p /root/.superset"
@@ -109,22 +109,22 @@ SUPERSET_WEBSERVER_TIMEOUT = 60
 # Configuration Mapbox (optionnel, ajouter une clé API si nécessaire)
 MAPBOX_API_KEY = ''
 EOF"
-  msg_ok "Superset configuration created"
+  msg_ok "Superset configuration created with a secure SECRET_KEY"
 
   # Initialisation de la base de données
   msg_info "Initializing Superset database"
-  pct exec $CTID -- bash -c "source /opt/superset-venv/bin/activate && export FLASK_APP=superset && superset db upgrade"
+  pct exec $CTID -- bash -c "source /opt/superset-venv/bin/activate && export FLASK_APP=superset && export SUPERSET_CONFIG_PATH=/root/.superset/superset_config.py && superset db upgrade"
   msg_ok "Superset database initialized successfully"
 
   # Création de l'utilisateur administrateur
   msg_info "Creating admin user for Superset"
-  pct exec $CTID -- bash -c "source /opt/superset-venv/bin/activate && export FLASK_APP=superset && superset fab create-admin \
+  pct exec $CTID -- bash -c "source /opt/superset-venv/bin/activate && export FLASK_APP=superset && export SUPERSET_CONFIG_PATH=/root/.superset/superset_config.py && superset fab create-admin \
     --username admin --firstname Admin --lastname User --email admin@example.com --password admin"
   msg_ok "Admin user created successfully"
 
   # Chargement des exemples de données
   msg_info "Loading example data into Superset"
-  pct exec $CTID -- bash -c "source /opt/superset-venv/bin/activate && export FLASK_APP=superset && superset load_examples"
+  pct exec $CTID -- bash -c "source /opt/superset-venv/bin/activate && export FLASK_APP=superset && export SUPERSET_CONFIG_PATH=/root/.superset/superset_config.py && superset load_examples"
   msg_ok "Example data loaded into Superset"
 
   # Configuration du service systemd
@@ -150,7 +150,6 @@ EOF"
   pct exec $CTID -- bash -c "systemctl daemon-reload && systemctl enable superset && systemctl start superset"
   msg_ok "Superset systemd service created and started successfully"
 }
-
 
 function motd_ssh_custom() {
   msg_info "Customizing MOTD and SSH access"
