@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 source <(curl -s https://raw.githubusercontent.com/tteck/Proxmox/main/misc/build.func)
 
+set -e  # Arrêter le script en cas d'erreur
+
 function header_info {
   clear
   cat <<"EOF"
@@ -34,52 +36,40 @@ function default_settings() {
   RAM_SIZE="$var_ram"
   BRG="vmbr0"
   NET="dhcp"
-  GATE=""
-  APT_CACHER=""
-  APT_CACHER_IP=""
   DISABLEIP6="no"
-  MTU=""
-  SD=""
-  NS=""
-  MAC=""
-  VLAN=""
   SSH="yes"
-  VERB="no"
   echo_default
 }
 
 function install_superset() {
   header_info
   msg_info "Installing dependencies inside the container"
-  pct exec $CTID -- bash -c "apt update && apt upgrade -y"
-  pct exec $CTID -- bash -c "apt install -y build-essential libssl-dev libffi-dev python3 python3-pip python3-dev libsasl2-dev libldap2-dev python3.11-venv redis-server"
-  msg_ok "Dependencies Installed"
 
-  # Vérification du démarrage de Redis
-  msg_info "Starting Redis service"
-  pct exec $CTID -- systemctl enable redis-server
-  pct exec $CTID -- systemctl start redis-server
+  # Mise à jour et installation des dépendances
+  pct exec $CTID -- bash -c "apt update && apt upgrade -y"
+  pct exec $CTID -- bash -c "apt install -y \
+    build-essential libssl-dev libffi-dev python3 python3-pip python3-dev \
+    libsasl2-dev libldap2-dev python3.11-venv redis-server"
+
+  # Démarrer et activer Redis
+  msg_info "Starting and enabling Redis"
+  pct exec $CTID -- bash -c "systemctl enable redis-server && systemctl start redis-server"
   pct exec $CTID -- bash -c "systemctl is-active --quiet redis-server && echo 'Redis is running' || (echo 'Redis failed to start'; exit 1)"
-  
-  # Test de connexion Redis
-  msg_info "Testing Redis connectivity"
-  pct exec $CTID -- bash -c "redis-cli -h localhost -p 6379 ping || (echo 'Redis connection failed'; exit 1)"
-  
+
+  # Créer un environnement virtuel Python pour Superset
   msg_info "Creating Python virtual environment for Superset"
   pct exec $CTID -- bash -c "python3 -m venv /opt/superset-venv"
   pct exec $CTID -- bash -c "source /opt/superset-venv/bin/activate && pip install --upgrade pip && pip install apache-superset pillow cachelib[redis]"
-  msg_ok "Apache Superset, PIL, and Redis cache libraries installed in the container"
+  
+  # Vérification des installations
+  pct exec $CTID -- bash -c "source /opt/superset-venv/bin/activate && python3 -c 'import PIL; print(\"Pillow installed\")'"
+  pct exec $CTID -- bash -c "source /opt/superset-venv/bin/activate && python3 -c 'from cachelib.redis import RedisCache; print(\"RedisCache installed\")'"
 
-  # Vérification de l'installation de PIL et cachelib[redis]
-  pct exec $CTID -- bash -c "source /opt/superset-venv/bin/activate && python3 -c 'import PIL; print(\"Pillow is installed\")'"
-  pct exec $CTID -- bash -c "source /opt/superset-venv/bin/activate && python3 -c 'from cachelib.redis import RedisCache; print(\"RedisCache is available\")'"
-
-  # Générer et configurer une clé secrète sécurisée dans ~/.superset/superset_config.py
+  # Configurer Superset
+  msg_info "Configuring Superset"
   SECRET_KEY=$(openssl rand -base64 42)
-  pct exec $CTID -- mkdir -p /root/.superset
+  pct exec $CTID -- bash -c "mkdir -p /root/.superset"
   pct exec $CTID -- bash -c "echo \"SECRET_KEY = '$SECRET_KEY'\" > /root/.superset/superset_config.py"
-
-  # Configuration de Redis comme cache pour Superset
   pct exec $CTID -- bash -c "cat <<EOF >> /root/.superset/superset_config.py
 from cachelib.redis import RedisCache
 CACHE_CONFIG = {
@@ -92,20 +82,18 @@ CACHE_CONFIG = {
     'CACHE_REDIS_PASSWORD': None,
 }
 EOF"
-  msg_ok "Redis cache configuration added to Superset config"
 
-  # Initialiser la base de données et créer l'utilisateur administrateur avec FLASK_APP configuré
-  msg_info "Initializing Superset database"
-  pct exec $CTID -- bash -c "export FLASK_APP=superset && export SUPERSET_CONFIG_PATH=/root/.superset/superset_config.py && source /opt/superset-venv/bin/activate && superset db upgrade"
-  pct exec $CTID -- bash -c "export FLASK_APP=superset && export SUPERSET_CONFIG_PATH=/root/.superset/superset_config.py && source /opt/superset-venv/bin/activate && superset fab create-admin --username admin --firstname Admin --lastname User --email admin@example.com --password admin"
-  msg_ok "Database initialized and admin user created"
+  # Initialiser la base de données et créer un administrateur
+  msg_info "Initializing Superset database and creating admin user"
+  pct exec $CTID -- bash -c "source /opt/superset-venv/bin/activate && export FLASK_APP=superset && superset db upgrade"
+  pct exec $CTID -- bash -c "source /opt/superset-venv/bin/activate && export FLASK_APP=superset && superset fab create-admin --username admin --firstname Admin --lastname User --email admin@example.com --password admin"
+  
+  # Charger des exemples de données
+  pct exec $CTID -- bash -c "source /opt/superset-venv/bin/activate && export FLASK_APP=superset && superset load_examples"
+  msg_ok "Superset database initialized and admin user created"
 
-  # Charger les exemples de données avec FLASK_APP configuré
-  pct exec $CTID -- bash -c "export FLASK_APP=superset && export SUPERSET_CONFIG_PATH=/root/.superset/superset_config.py && source /opt/superset-venv/bin/activate && superset load_examples"
-  msg_ok "Example data loaded"
-
-  # Configurer le service systemd pour Superset
-  msg_info "Creating systemd service for Superset in the container"
+  # Configurer un service systemd pour Superset
+  msg_info "Creating systemd service for Superset"
   pct exec $CTID -- bash -c "cat <<EOF >/etc/systemd/system/superset.service
 [Unit]
 Description=Apache Superset
@@ -116,48 +104,30 @@ User=root
 Group=root
 WorkingDirectory=/opt/superset-venv
 Environment=\"PATH=/opt/superset-venv/bin\"
-Environment=\"FLASK_APP=superset\"
-Environment=\"SUPERSET_CONFIG_PATH=/root/.superset/superset_config.py\"
 ExecStart=/opt/superset-venv/bin/gunicorn --workers 3 --timeout 120 --bind 0.0.0.0:8088 \"superset.app:create_app()\"
 Restart=always
 
 [Install]
 WantedBy=multi-user.target
 EOF"
-  pct exec $CTID -- systemctl daemon-reload
-  pct exec $CTID -- systemctl enable superset
-  pct exec $CTID -- systemctl start superset
-  msg_ok "Superset systemd service created and started in the container"
+  pct exec $CTID -- bash -c "systemctl daemon-reload && systemctl enable superset && systemctl start superset"
+  msg_ok "Superset systemd service created and started"
 }
 
 function motd_ssh_custom() {
-  msg_info "Customizing MOTD and SSH access"
-  # Customize MOTD with Superset specific message
+  msg_info "Customizing MOTD"
   pct exec $CTID -- bash -c "echo 'Welcome to your Superset LXC container!' > /etc/motd"
-  
-  # Set up auto-login for root on tty1
-  pct exec $CTID -- mkdir -p /etc/systemd/system/container-getty@1.service.d
-  pct exec $CTID -- bash -c "cat <<EOF >/etc/systemd/system/container-getty@1.service.d/override.conf
-[Service]
-ExecStart=
-ExecStart=-/sbin/agetty --autologin root --noclear --keep-baud tty%I 115200,38400,9600 \\$TERM
-EOF"
-
-  # Reload systemd and restart getty service to apply auto-login
-  pct exec $CTID -- systemctl daemon-reload
-  pct exec $CTID -- systemctl restart container-getty@1.service
-  msg_ok "MOTD and SSH access customized"
+  msg_ok "MOTD customized"
 }
 
 header_info
 start
 build_container
+default_settings
 install_superset
 motd_ssh_custom
 description
 
-# Using the IP variable set by description function to display the final message
 msg_ok "Completed Successfully!\n"
 echo -e "${APP} should be reachable by going to the following URL:
          ${BL}http://${IP}:8088${CL} \n"
-echo -e "Aucun accès SSH n'est nécessaire pour administrer le conteneur depuis le nœud Proxmox."
