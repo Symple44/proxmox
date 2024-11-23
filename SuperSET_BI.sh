@@ -55,23 +55,9 @@ function install_superset() {
   # Mise à jour et installation des dépendances de base
   pct exec $CTID -- bash -c "apt update && apt upgrade -y"
   pct exec $CTID -- bash -c "apt install -y build-essential libssl-dev libffi-dev python3 python3-pip python3-dev \
-    libsasl2-dev libldap2-dev python3.11-venv redis-server postgresql postgresql-contrib libpq-dev"
+    libsasl2-dev libldap2-dev python3.11-venv redis-server libmariadb-dev libmariadb-dev-compat"
 
-  # Dépendances pour MySQL (remplacement par MariaDB)
-  msg_info "Installing MySQL (MariaDB) dependencies"
-  pct exec $CTID -- bash -c "apt install -y libmariadb-dev libmariadb-dev-compat python3-dev build-essential"
-  msg_ok "MySQL dependencies installed successfully (via MariaDB libraries)"
-
-  # Dépendances pour SQL Server
-  msg_info "Installing SQL Server dependencies"
-  pct exec $CTID -- bash -c "apt install -y unixodbc-dev gcc g++ build-essential"
-  pct exec $CTID -- bash -c "curl https://packages.microsoft.com/keys/microsoft.asc | apt-key add -"
-  pct exec $CTID -- bash -c "curl https://packages.microsoft.com/config/ubuntu/$(lsb_release -rs)/prod.list > /etc/apt/sources.list.d/mssql-release.list"
-  pct exec $CTID -- bash -c "apt update && ACCEPT_EULA=Y apt install -y msodbcsql17 mssql-tools"
-  pct exec $CTID -- bash -c "echo 'export PATH=\$PATH:/opt/mssql-tools/bin' >> ~/.bashrc && source ~/.bashrc"
-  msg_ok "SQL Server dependencies installed successfully"
-
-  # Configuration et vérification de Redis
+  # Vérification de Redis
   msg_info "Starting Redis service"
   pct exec $CTID -- bash -c "systemctl enable redis-server && systemctl start redis-server"
   pct exec $CTID -- bash -c "systemctl is-active --quiet redis-server && echo 'Redis is running' || (echo 'Redis failed to start'; exit 1)"
@@ -86,8 +72,7 @@ function install_superset() {
 
   # Installation de Superset et des bibliothèques nécessaires
   msg_info "Installing Superset and related libraries"
-  pct exec $CTID -- bash -c "source /opt/superset-venv/bin/activate && pip install apache-superset pillow cachelib[redis] \
-    psycopg2-binary mysqlclient pyodbc"
+  pct exec $CTID -- bash -c "source /opt/superset-venv/bin/activate && pip install apache-superset pillow cachelib[redis] mysqlclient"
   msg_ok "Superset and related libraries installed successfully"
 
   # Configuration de Superset
@@ -100,14 +85,11 @@ from cachelib.redis import RedisCache
 # Clé secrète pour sécuriser les sessions
 SECRET_KEY = '$SECRET_KEY'
 
-# Exemple de configuration pour PostgreSQL (remplacer si nécessaire)
+# Exemple de configuration pour PostgreSQL (par défaut)
 SQLALCHEMY_DATABASE_URI = 'postgresql+psycopg2://superset_user:votre_mot_de_passe@localhost/superset'
 
 # Exemple de configuration pour MySQL
-# SQLALCHEMY_DATABASE_URI = 'mysql+pymysql://superset_user:votre_mot_de_passe@localhost/superset'
-
-# Exemple de configuration pour SQL Server
-# SQLALCHEMY_DATABASE_URI = 'mssql+pyodbc://superset_user:votre_mot_de_passe@localhost/superset?driver=ODBC+Driver+17+for+SQL+Server'
+# SQLALCHEMY_DATABASE_URI = 'mysql+pymysql://superset_user:votre_mot_de_passe@your_mysql_server:3306/superset'
 
 # Configuration du cache
 CACHE_CONFIG = {
