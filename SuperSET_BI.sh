@@ -57,10 +57,10 @@ function install_superset() {
   pct exec $CTID -- bash -c "apt install -y build-essential libssl-dev libffi-dev python3 python3-pip python3-dev \
     libsasl2-dev libldap2-dev python3.11-venv redis-server postgresql postgresql-contrib libpq-dev"
 
-  # Dépendances pour MySQL
-  msg_info "Installing MySQL dependencies"
-  pct exec $CTID -- bash -c "apt install -y libmysqlclient-dev python3-dev build-essential"
-  msg_ok "MySQL dependencies installed successfully"
+  # Dépendances pour MySQL (remplacement par MariaDB)
+  msg_info "Installing MySQL (MariaDB) dependencies"
+  pct exec $CTID -- bash -c "apt install -y libmariadb-dev libmariadb-dev-compat python3-dev build-essential"
+  msg_ok "MySQL dependencies installed successfully (via MariaDB libraries)"
 
   # Dépendances pour SQL Server
   msg_info "Installing SQL Server dependencies"
