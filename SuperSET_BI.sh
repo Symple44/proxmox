@@ -36,8 +36,17 @@ function default_settings() {
   RAM_SIZE="$var_ram"
   BRG="vmbr0"
   NET="dhcp"
+  GATE="${GATE:-}"                # Initialisation avec une valeur par défaut vide
+  APT_CACHER="${APT_CACHER:-}"    # Assure que la variable est initialisée
+  APT_CACHER_IP="${APT_CACHER_IP:-}"
   DISABLEIP6="no"
+  MTU="${MTU:-}"                  # Définit une valeur par défaut vide pour MTU
+  SD="${SD:-}"
+  NS="${NS:-}"
+  MAC="${MAC:-}"
+  VLAN="${VLAN:-}"
   SSH="yes"
+  VERB="no"
   echo_default
 }
 
