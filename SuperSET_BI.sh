@@ -2,24 +2,10 @@
 source <(curl -s https://raw.githubusercontent.com/tteck/Proxmox/main/misc/build.func)
 
 set -e  # Arrêter le script en cas d'erreur
-set -u  # Déclencher une erreur si une variable non initialisée est utilisée
-set -o pipefail  # Arrêter le pipeline si une commande échoue
+set -u  # Erreur si une variable non initialisée est utilisée
+set -o pipefail  # Arrêter si une commande dans un pipeline échoue
 
-function header_info {
-  clear
-  cat <<"EOF"
-    _____                              __   
-   / ___/____ ___  ____ _____  ____ _/ /__ 
-   \__ \/ __ `__ \/ __ `/ __ \/ __ `/ / _ \
-  ___/ / / / / / /_/ / / / / / /_/ / /  __/
- /____/_/ /_/ /_/\__,_/_/ /_/\__, /_/\___/ 
-                             /____/         
-EOF
-}
-
-header_info
-
-# Variables globales avec initialisation explicite
+# Initialisation explicite de toutes les variables globales
 APP="Superset"
 var_disk="10"
 var_cpu="4"
@@ -46,6 +32,21 @@ MAC="${MAC:-}"
 VLAN="${VLAN:-}"
 SSH="yes"
 VERB="no"
+HOLD="${HOLD:-}"  # Ajout d'une initialisation pour HOLD
+
+function header_info {
+  clear
+  cat <<"EOF"
+    _____                              __   
+   / ___/____ ___  ____ _____  ____ _/ /__ 
+   \__ \/ __ `__ \/ __ `/ __ \/ __ `/ / _ \
+  ___/ / / / / / /_/ / / / / / /_/ / /  __/
+ /____/_/ /_/ /_/\__,_/_/ /_/\__, /_/\___/ 
+                             /____/         
+EOF
+}
+
+header_info
 
 # Affichage des paramètres par défaut
 function echo_default() {
