@@ -3,33 +3,6 @@ source <(curl -s https://raw.githubusercontent.com/tteck/Proxmox/main/misc/build
 
 set -e  # Arrêter le script en cas d'erreur
 
-# Initialisation explicite de toutes les variables
-APP="Superset"
-var_disk="10"
-var_cpu="4"
-var_ram="4096"
-var_os="debian"
-var_version="12"
-CT_TYPE="1"
-PW=""
-CT_ID=""
-HN=""
-DISK_SIZE="$var_disk"
-CORE_COUNT="$var_cpu"
-RAM_SIZE="$var_ram"
-BRG="vmbr0"
-NET="dhcp"
-GATE=""
-
-DISABLEIP6="no"
-MTU=""
-SD=""
-NS=""
-MAC=""
-VLAN=""
-SSH="yes"
-VERB="no"
-
 function header_info {
   clear
   cat <<"EOF"
@@ -43,6 +16,14 @@ EOF
 }
 
 header_info
+
+APP="Superset"
+var_disk="10"
+var_cpu="4"
+var_ram="4096"
+var_os="debian"
+var_version="12"
+
 variables
 color
 catch_errors
