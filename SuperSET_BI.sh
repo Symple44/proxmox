@@ -1,14 +1,7 @@
 #!/usr/bin/env bash
-
-# Initialisation explicite de la variable HOLD
-HOLD="${HOLD:-}"
-
-# Charger le fichier d'assistance
 source <(curl -s https://raw.githubusercontent.com/tteck/Proxmox/main/misc/build.func)
 
 set -e  # Arrêter le script en cas d'erreur
-set -u  # Erreur si une variable non initialisée est utilisée
-set -o pipefail  # Arrêter si une commande dans un pipeline échoue
 
 function header_info {
   clear
@@ -24,35 +17,20 @@ EOF
 
 header_info
 
-# Variables globales avec initialisation explicite
+# Initialisation explicite des variables critiques pour éviter les erreurs
+HOLD=""  # Ajout explicite pour éviter les erreurs liées à HOLD
+
 APP="Superset"
 var_disk="10"
 var_cpu="4"
 var_ram="4096"
 var_os="debian"
 var_version="12"
-CT_TYPE="1"
-PW=""
-CT_ID="${CT_ID:-101}"  # ID par défaut si non défini
-HN="${HN:-superset}"
-DISK_SIZE="$var_disk"
-CORE_COUNT="$var_cpu"
-RAM_SIZE="$var_ram"
-BRG="vmbr0"
-NET="dhcp"
-GATE="${GATE:-}"
-APT_CACHER="${APT_CACHER:-}"
-APT_CACHER_IP="${APT_CACHER_IP:-}"
-DISABLEIP6="no"
-MTU="${MTU:-}"
-SD="${SD:-}"
-NS="${NS:-}"
-MAC="${MAC:-}"
-VLAN="${VLAN:-}"
-SSH="yes"
-VERB="no"
 
-# Affichage des paramètres par défaut
+variables
+color
+catch_errors
+
 function echo_default() {
   echo "Using Default Settings"
   echo "Using Distribution: $var_os"
@@ -158,9 +136,9 @@ function motd_ssh_custom() {
 }
 
 header_info
-echo_default
 install_superset
 motd_ssh_custom
+description
 
 msg_ok "Completed Successfully!\n"
 echo -e "${APP} should be reachable by going to the following URL:
