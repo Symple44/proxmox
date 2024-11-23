@@ -28,13 +28,6 @@ variables
 color
 catch_errors
 
-function default_settings() {
-  # Affecter des valeurs par défaut si elles ne sont pas définies
-  CT_ID="${CT_ID:-$NEXTID}"
-  HN="${HN:-$NSAPP}"
-  echo_default
-}
-
 function echo_default() {
   echo "Using Default Settings"
   echo "Using Distribution: $var_os"
