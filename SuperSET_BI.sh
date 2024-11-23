@@ -1,14 +1,12 @@
 #!/usr/bin/env bash
 source <(curl -s https://raw.githubusercontent.com/tteck/Proxmox/main/misc/build.func)
 
-set -e  # Arrêter le script en cas d'erreur
-
 function header_info {
   clear
   cat <<"EOF"
     _____                              __   
    / ___/____ ___  ____ _____  ____ _/ /__ 
-   \__ \/ __ `__ \/ __ `/ __ \/ __ `/ / _ \
+   \__ \/ __ __ \/ __ / __ \/ __ / / _ \
   ___/ / / / / / /_/ / / / / / /_/ / /  __/
  /____/_/ /_/ /_/\__,_/_/ /_/\__, /_/\___/ 
                              /____/         
@@ -16,83 +14,102 @@ EOF
 }
 
 header_info
-
 APP="Superset"
-var_disk="10"       # Taille du disque en Go
-var_cpu="4"         # Nombre de cœurs
-var_ram="4096"      # RAM en Mo
+var_disk="10"
+var_cpu="4"
+var_ram="4096"
 var_os="debian"
 var_version="12"
-
-function default_settings() {
-  # Initialisation des variables par défaut
-  CT_TYPE="1"                     # Type de conteneur : 1 = Unprivileged
-  PW=""                           # Pas de mot de passe root
-  CT_ID=$NEXTID                   # Identifiant du conteneur généré automatiquement
-  HN=$NSAPP                       # Nom d'hôte basé sur l'application
-  DISK_SIZE="$var_disk"           # Taille du disque
-  CORE_COUNT="$var_cpu"           # Nombre de cœurs
-  RAM_SIZE="$var_ram"             # Taille de la RAM
-  BRG="vmbr0"                     # Pont réseau par défaut
-  NET="dhcp"                      # Utilisation de DHCP
-  DISABLEIP6="no"                 # IPv6 activé par défaut
-  SSH="yes"                       # SSH activé
-  echo_default
-}
-
-function echo_default() {
-  echo "Using Default Settings"
-  echo "Using Distribution: $var_os"
-  echo "Using $var_os Version: $var_version"
-  echo "Using Container Type: $CT_TYPE"
-  echo "Using Root Password: ${PW:-Automatic Login}"
-  echo "Using Container ID: $CT_ID"
-  echo "Using Hostname: $HN"
-  echo "Using Disk Size: ${DISK_SIZE}GB"
-  echo "Allocated Cores $CORE_COUNT"
-  echo "Allocated Ram $RAM_SIZE MB"
-  echo "Using Bridge: $BRG"
-  echo "Using Static IP Address: $NET"
-  echo "Disable IPv6: $DISABLEIP6"
-  echo "Enable Root SSH Access: $SSH"
-}
-
 variables
 color
 catch_errors
-default_settings
+
+function default_settings() {
+  CT_TYPE="1"
+  PW=""
+  CT_ID=$NEXTID
+  HN=$NSAPP
+  DISK_SIZE="$var_disk"
+  CORE_COUNT="$var_cpu"
+  RAM_SIZE="$var_ram"
+  BRG="vmbr0"
+  NET="dhcp"
+  GATE=""
+  APT_CACHER=""
+  APT_CACHER_IP=""
+  DISABLEIP6="no"
+  MTU=""
+  SD=""
+  NS=""
+  MAC=""
+  VLAN=""
+  SSH="yes"
+  VERB="no"
+  echo_default
+}
 
 function install_superset() {
   header_info
   msg_info "Installing dependencies inside the container"
 
-  # Mise à jour et installation des dépendances
-  pct exec $CT_ID -- bash -c "apt update && apt upgrade -y"
-  pct exec $CT_ID -- bash -c "apt install -y \
-    build-essential libssl-dev libffi-dev python3 python3-pip python3-dev \
-    libsasl2-dev libldap2-dev python3.11-venv redis-server"
+  # Mise à jour et installation des dépendances de base
+  pct exec $CTID -- bash -c "apt update && apt upgrade -y"
+  pct exec $CTID -- bash -c "apt install -y build-essential libssl-dev libffi-dev python3 python3-pip python3-dev \
+    libsasl2-dev libldap2-dev python3.11-venv redis-server postgresql postgresql-contrib libpq-dev"
 
-  # Démarrer et activer Redis
-  msg_info "Starting and enabling Redis"
-  pct exec $CT_ID -- bash -c "systemctl enable redis-server && systemctl start redis-server"
-  pct exec $CT_ID -- bash -c "systemctl is-active --quiet redis-server && echo 'Redis is running' || (echo 'Redis failed to start'; exit 1)"
+  # Dépendances pour MySQL
+  msg_info "Installing MySQL dependencies"
+  pct exec $CTID -- bash -c "apt install -y libmysqlclient-dev python3-dev build-essential"
+  msg_ok "MySQL dependencies installed successfully"
 
-  # Créer un environnement virtuel Python pour Superset
+  # Dépendances pour SQL Server
+  msg_info "Installing SQL Server dependencies"
+  pct exec $CTID -- bash -c "apt install -y unixodbc-dev gcc g++ build-essential"
+  pct exec $CTID -- bash -c "curl https://packages.microsoft.com/keys/microsoft.asc | apt-key add -"
+  pct exec $CTID -- bash -c "curl https://packages.microsoft.com/config/ubuntu/$(lsb_release -rs)/prod.list > /etc/apt/sources.list.d/mssql-release.list"
+  pct exec $CTID -- bash -c "apt update && ACCEPT_EULA=Y apt install -y msodbcsql17 mssql-tools"
+  pct exec $CTID -- bash -c "echo 'export PATH=\$PATH:/opt/mssql-tools/bin' >> ~/.bashrc && source ~/.bashrc"
+  msg_ok "SQL Server dependencies installed successfully"
+
+  # Configuration et vérification de Redis
+  msg_info "Starting Redis service"
+  pct exec $CTID -- bash -c "systemctl enable redis-server && systemctl start redis-server"
+  pct exec $CTID -- bash -c "systemctl is-active --quiet redis-server && echo 'Redis is running' || (echo 'Redis failed to start'; exit 1)"
+  pct exec $CTID -- bash -c "redis-cli -h localhost -p 6379 ping || (echo 'Redis connection failed'; exit 1)"
+  msg_ok "Redis service is running and responsive"
+
+  # Création de l'environnement virtuel Python
   msg_info "Creating Python virtual environment for Superset"
-  pct exec $CT_ID -- bash -c "python3 -m venv /opt/superset-venv"
-  pct exec $CT_ID -- bash -c "source /opt/superset-venv/bin/activate && pip install --upgrade pip && pip install apache-superset pillow cachelib[redis]"
-  
-  # Vérification des installations
-  pct exec $CT_ID -- bash -c "source /opt/superset-venv/bin/activate && python3 -c 'import PIL; print(\"Pillow installed\")'"
-  pct exec $CT_ID -- bash -c "source /opt/superset-venv/bin/activate && python3 -c 'from cachelib.redis import RedisCache; print(\"RedisCache installed\")'"
+  pct exec $CTID -- bash -c "python3 -m venv /opt/superset-venv"
+  pct exec $CTID -- bash -c "source /opt/superset-venv/bin/activate && pip install --upgrade pip setuptools wheel"
+  msg_ok "Python virtual environment created successfully"
 
-  # Configurer Superset
+  # Installation de Superset et des bibliothèques nécessaires
+  msg_info "Installing Superset and related libraries"
+  pct exec $CTID -- bash -c "source /opt/superset-venv/bin/activate && pip install apache-superset pillow cachelib[redis] \
+    psycopg2-binary mysqlclient pyodbc"
+  msg_ok "Superset and related libraries installed successfully"
+
+  # Configuration de Superset
   msg_info "Configuring Superset"
   SECRET_KEY=$(openssl rand -base64 42)
-  pct exec $CT_ID -- bash -c "mkdir -p /root/.superset"
-  pct exec $CT_ID -- bash -c "echo \"SECRET_KEY = '$SECRET_KEY'\" > /root/.superset/superset_config.py"
-  pct exec $CT_ID -- bash -c "cat <<EOF >> /root/.superset/superset_config.py
+  pct exec $CTID -- bash -c "mkdir -p /root/.superset"
+  pct exec $CTID -- bash -c "cat <<EOF > /root/.superset/superset_config.py
 from cachelib.redis import RedisCache
+
+# Clé secrète pour sécuriser les sessions
+SECRET_KEY = '$SECRET_KEY'
+
+# Exemple de configuration pour PostgreSQL (remplacer si nécessaire)
+SQLALCHEMY_DATABASE_URI = 'postgresql+psycopg2://superset_user:votre_mot_de_passe@localhost/superset'
+
+# Exemple de configuration pour MySQL
+# SQLALCHEMY_DATABASE_URI = 'mysql+pymysql://superset_user:votre_mot_de_passe@localhost/superset'
+
+# Exemple de configuration pour SQL Server
+# SQLALCHEMY_DATABASE_URI = 'mssql+pyodbc://superset_user:votre_mot_de_passe@localhost/superset?driver=ODBC+Driver+17+for+SQL+Server'
+
+# Configuration du cache
 CACHE_CONFIG = {
     'CACHE_TYPE': 'RedisCache',
     'CACHE_DEFAULT_TIMEOUT': 300,
@@ -102,20 +119,34 @@ CACHE_CONFIG = {
     'CACHE_REDIS_DB': 1,
     'CACHE_REDIS_PASSWORD': None,
 }
+
+# Timeout pour les requêtes
+SUPERSET_WEBSERVER_TIMEOUT = 60
+
+# Configuration Mapbox (optionnel, ajouter une clé API si nécessaire)
+MAPBOX_API_KEY = ''
 EOF"
+  msg_ok "Superset configuration created"
 
-  # Initialiser la base de données et créer un administrateur
-  msg_info "Initializing Superset database and creating admin user"
-  pct exec $CT_ID -- bash -c "source /opt/superset-venv/bin/activate && export FLASK_APP=superset && superset db upgrade"
-  pct exec $CT_ID -- bash -c "source /opt/superset-venv/bin/activate && export FLASK_APP=superset && superset fab create-admin --username admin --firstname Admin --lastname User --email admin@example.com --password admin"
-  
-  # Charger des exemples de données
-  pct exec $CT_ID -- bash -c "source /opt/superset-venv/bin/activate && export FLASK_APP=superset && superset load_examples"
-  msg_ok "Superset database initialized and admin user created"
+  # Initialisation de la base de données
+  msg_info "Initializing Superset database"
+  pct exec $CTID -- bash -c "source /opt/superset-venv/bin/activate && export FLASK_APP=superset && superset db upgrade"
+  msg_ok "Superset database initialized successfully"
 
-  # Configurer un service systemd pour Superset
+  # Création de l'utilisateur administrateur
+  msg_info "Creating admin user for Superset"
+  pct exec $CTID -- bash -c "source /opt/superset-venv/bin/activate && export FLASK_APP=superset && superset fab create-admin \
+    --username admin --firstname Admin --lastname User --email admin@example.com --password admin"
+  msg_ok "Admin user created successfully"
+
+  # Chargement des exemples de données
+  msg_info "Loading example data into Superset"
+  pct exec $CTID -- bash -c "source /opt/superset-venv/bin/activate && export FLASK_APP=superset && superset load_examples"
+  msg_ok "Example data loaded into Superset"
+
+  # Configuration du service systemd
   msg_info "Creating systemd service for Superset"
-  pct exec $CT_ID -- bash -c "cat <<EOF >/etc/systemd/system/superset.service
+  pct exec $CTID -- bash -c "cat <<EOF >/etc/systemd/system/superset.service
 [Unit]
 Description=Apache Superset
 After=network.target
@@ -125,27 +156,48 @@ User=root
 Group=root
 WorkingDirectory=/opt/superset-venv
 Environment=\"PATH=/opt/superset-venv/bin\"
-ExecStart=/opt/superset-venv/bin/gunicorn --workers 3 --timeout 120 --bind 0.0.0.0:8088 \"superset.app:create_app()\"
+Environment=\"FLASK_APP=superset\"
+Environment=\"SUPERSET_CONFIG_PATH=/root/.superset/superset_config.py\"
+ExecStart=/opt/superset-venv/bin/gunicorn --workers 4 --timeout 120 --bind 0.0.0.0:8088 \"superset.app:create_app()\"
 Restart=always
 
 [Install]
 WantedBy=multi-user.target
 EOF"
-  pct exec $CT_ID -- bash -c "systemctl daemon-reload && systemctl enable superset && systemctl start superset"
-  msg_ok "Superset systemd service created and started"
+  pct exec $CTID -- bash -c "systemctl daemon-reload && systemctl enable superset && systemctl start superset"
+  msg_ok "Superset systemd service created and started successfully"
 }
 
+
+
 function motd_ssh_custom() {
-  msg_info "Customizing MOTD"
-  pct exec $CT_ID -- bash -c "echo 'Welcome to your Superset LXC container!' > /etc/motd"
-  msg_ok "MOTD customized"
+  msg_info "Customizing MOTD and SSH access"
+  # Customize MOTD with Superset specific message
+  pct exec $CTID -- bash -c "echo 'Welcome to your Superset LXC container!' > /etc/motd"
+  
+  # Set up auto-login for root on tty1
+  pct exec $CTID -- mkdir -p /etc/systemd/system/container-getty@1.service.d
+  pct exec $CTID -- bash -c "cat <<EOF >/etc/systemd/system/container-getty@1.service.d/override.conf
+[Service]
+ExecStart=
+ExecStart=-/sbin/agetty --autologin root --noclear --keep-baud tty%I 115200,38400,9600 \\$TERM
+EOF"
+
+  # Reload systemd and restart getty service to apply auto-login
+  pct exec $CTID -- systemctl daemon-reload
+  pct exec $CTID -- systemctl restart container-getty@1.service
+  msg_ok "MOTD and SSH access customized"
 }
 
 header_info
+start
+build_container
 install_superset
 motd_ssh_custom
 description
 
+# Using the IP variable set by description function to display the final message
 msg_ok "Completed Successfully!\n"
 echo -e "${APP} should be reachable by going to the following URL:
          ${BL}http://${IP}:8088${CL} \n"
+echo -e "Aucun accès SSH n'est nécessaire pour administrer le conteneur depuis le nœud Proxmox."
