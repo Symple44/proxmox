@@ -48,12 +48,32 @@ function default_settings() {
   echo_default
 }
 
+function configure_locales() {
+  msg_info "Configuring locales in the container"
+  
+  # Réinstalle locales pour assurer une configuration propre
+  pct exec $CTID -- bash -c "apt install -y locales"
+  
+  # Définir la locale par défaut
+  pct exec $CTID -- bash -c "echo 'LANG=en_US.UTF-8' > /etc/default/locale"
+  pct exec $CTID -- bash -c "echo 'en_US.UTF-8 UTF-8' >> /etc/locale.gen"
+  
+  # Générer la locale
+  pct exec $CTID -- bash -c "locale-gen en_US.UTF-8"
+  
+  if [ $? -ne 0 ]; then
+    msg_error "Failed to configure locales"
+    exit 1
+  fi
+  
+  msg_ok "Locales configured successfully"
+}
+
 function install_dependencies() {
   msg_info "Installing system dependencies"
   pct exec $CTID -- bash -c "apt update && apt install -y build-essential libssl-dev libffi-dev python3 python3-pip python3-dev \
     libsasl2-dev libldap2-dev python3.11-venv redis-server libpq-dev mariadb-client libmariadb-dev libmariadb-dev-compat \
-    freetds-dev unixodbc-dev curl postgresql locales"
-  pct exec $CTID -- bash -c "locale-gen en_US.UTF-8 && update-locale LANG=en_US.UTF-8"
+    freetds-dev unixodbc-dev curl postgresql"
   if [ $? -ne 0 ]; then
     msg_error "Failed to install dependencies. Check the network or package repository."
     exit 1
@@ -108,6 +128,7 @@ function configure_postgresql() {
 
 function main() {
   install_dependencies
+  configure_locales
   configure_pg_authentication
   configure_postgresql
 }
