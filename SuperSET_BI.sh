@@ -62,14 +62,29 @@ function install_dependencies() {
 
 function configure_postgresql() {
   msg_info "Configuring PostgreSQL database for Superset"
+
+  # Start PostgreSQL service
   pct exec $CTID -- bash -c "systemctl enable postgresql && systemctl start postgresql"
-  pct exec $CTID -- bash -c "sudo -u postgres psql -c 'CREATE DATABASE superset;'"
-  pct exec $CTID -- bash -c "sudo -u postgres psql -c \"CREATE USER superset_user WITH PASSWORD 'password';\""
-  pct exec $CTID -- bash -c "sudo -u postgres psql -c 'GRANT ALL PRIVILEGES ON DATABASE superset TO superset_user;'"
+
+  # Ensure the postgres user exists
+  pct exec $CTID -- bash -c "psql -U postgres -c '\du'" || \
+    pct exec $CTID -- bash -c "createuser --superuser postgres"
+
+  # Create Superset database
+  pct exec $CTID -- bash -c "psql -U postgres -c 'CREATE DATABASE superset;'"
   if [ $? -ne 0 ]; then
-    msg_error "Failed to configure PostgreSQL database"
+    msg_error "Failed to create the Superset database"
     exit 1
   fi
+
+  # Create and configure the superset_user
+  pct exec $CTID -- bash -c "psql -U postgres -c \"CREATE USER superset_user WITH PASSWORD 'password';\""
+  pct exec $CTID -- bash -c "psql -U postgres -c 'GRANT ALL PRIVILEGES ON DATABASE superset TO superset_user;'"
+  if [ $? -ne 0 ]; then
+    msg_error "Failed to configure the Superset user"
+    exit 1
+  fi
+
   msg_ok "PostgreSQL database configured successfully"
 }
 
@@ -156,7 +171,6 @@ function initialize_superset() {
 }
 
 function main() {
-  
   install_dependencies
   configure_postgresql
   configure_redis
