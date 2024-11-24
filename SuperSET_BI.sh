@@ -51,40 +51,14 @@ function default_settings() {
   echo_default
 }
 
-function configure_locales() {
-  msg_info "Configuration des paramètres régionaux dans le conteneur"
-
-  pct exec $CTID -- bash -c "apt install -y locales"
-  pct exec $CTID -- bash -c "echo 'LANG=en_US.UTF-8' > /etc/default/locale"
-  pct exec $CTID -- bash -c "echo 'en_US.UTF-8 UTF-8' >> /etc/locale.gen"
-  pct exec $CTID -- bash -c "locale-gen en_US.UTF-8"
-
-  if [ $? -ne 0 ]; then
-    msg_error "Échec de la configuration des paramètres régionaux"
-    exit 1
-  fi
-
-  msg_ok "Paramètres régionaux configurés avec succès"
-}
-
-function install_dependencies() {
-  msg_info "Installation des dépendances système"
-  pct exec $CTID -- bash -c "apt update && apt install -y build-essential libssl-dev libffi-dev python3 python3-pip python3-dev \
-    libsasl2-dev libldap2-dev python3.11-venv redis-server libpq-dev mariadb-client libmariadb-dev libmariadb-dev-compat \
-    freetds-dev unixodbc-dev curl postgresql"
-  if [ $? -ne 0 ]; then
-    msg_error "Échec de l'installation des dépendances"
-    exit 1
-  fi
-  msg_ok "Dépendances système installées avec succès"
-}
-
 function configure_pg_authentication() {
   msg_info "Configuration de l'authentification PostgreSQL"
 
+  # Modifier pg_hba.conf pour activer l'authentification scram-sha-256
   pct exec $CTID -- bash -c "sed -i 's/local\s*all\s*postgres\s*peer/local all postgres scram-sha-256/' /etc/postgresql/*/main/pg_hba.conf"
   pct exec $CTID -- bash -c "systemctl restart postgresql"
 
+  # Définir le mot de passe PostgreSQL
   pct exec $CTID -- bash -c "psql -U postgres -c \"ALTER USER postgres WITH PASSWORD '$POSTGRES_PASSWORD';\""
   if [ $? -ne 0 ]; then
     msg_error "Échec de la configuration de l'authentification PostgreSQL"
@@ -157,8 +131,6 @@ function install_superset() {
 }
 
 function main() {
-  install_dependencies
-  configure_locales
   configure_pg_authentication
   configure_postgresql
   install_superset
