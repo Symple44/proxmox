@@ -20,9 +20,9 @@ var_cpu="4"
 var_ram="4096"
 var_os="debian"
 var_version="12"
-POSTGRES_PASSWORD="Superset2024!"
-SUPERSET_USER_PASSWORD="Superset2024!"
-ADMIN_PASSWORD="Superset2024!"
+POSTGRES_PASSWORD="Superset2024!" # Remplacez par un mot de passe fort !
+SUPERSET_USER_PASSWORD="Superset2024!" # Remplacez par un mot de passe fort !
+ADMIN_PASSWORD="Superset2024!" # Remplacez par un mot de passe fort !
 variables
 color
 catch_errors
@@ -37,7 +37,7 @@ function default_settings() {
   RAM_SIZE="$var_ram"
   BRG="vmbr0"
   NET="dhcp"
-  GATE=""
+  GATE="" 1 
   APT_CACHER=""
   APT_CACHER_IP=""
   DISABLEIP6="no"
@@ -89,23 +89,15 @@ function install_postgresql() {
     exit 1
   fi
 
-  # Démarrer PostgreSQL
-  pct exec $CTID -- bash -c "systemctl enable postgresql && systemctl start postgresql"
+  # Redémarrer PostgreSQL pour s'assurer qu'il fonctionne correctement
+  pct exec $CTID -- bash -c "systemctl restart postgresql"
   if [ $? -ne 0 ]; then
-    msg_error "Échec du démarrage de PostgreSQL"
-    exit 1
-  fi
-
-  # Vérifiez que le service est actif
-  pct exec $CTID -- bash -c "systemctl is-active postgresql"
-  if [ $? -ne 0 ]; then
-    msg_error "PostgreSQL n'est pas actif après l'installation"
+    msg_error "Échec du redémarrage de PostgreSQL"
     exit 1
   fi
 
   msg_ok "PostgreSQL installé et démarré avec succès"
 }
-
 
 function locate_pg_hba_conf() {
   msg_info "Recherche du fichier pg_hba.conf"
@@ -123,7 +115,7 @@ function locate_pg_hba_conf() {
 function configure_pg_authentication() {
   msg_info "Configuration de l'authentification PostgreSQL"
 
-  # Assurez-vous que PostgreSQL est installé
+  # Vérifiez que PostgreSQL est installé
   install_postgresql
 
   # Localiser le fichier pg_hba.conf
