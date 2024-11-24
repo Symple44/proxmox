@@ -82,22 +82,30 @@ function install_dependencies() {
 function install_postgresql() {
   msg_info "Installation de PostgreSQL"
 
-  # Installer PostgreSQL si ce n'est pas déjà fait
+  # Installer PostgreSQL
   pct exec $CTID -- bash -c "apt update && apt install -y postgresql"
   if [ $? -ne 0 ]; then
     msg_error "Échec de l'installation de PostgreSQL"
     exit 1
   fi
 
-  # Démarrer PostgreSQL pour initialiser les fichiers de configuration
+  # Démarrer PostgreSQL
   pct exec $CTID -- bash -c "systemctl enable postgresql && systemctl start postgresql"
   if [ $? -ne 0 ]; then
     msg_error "Échec du démarrage de PostgreSQL"
     exit 1
   fi
 
+  # Vérifiez que le service est actif
+  pct exec $CTID -- bash -c "systemctl is-active postgresql"
+  if [ $? -ne 0 ]; then
+    msg_error "PostgreSQL n'est pas actif après l'installation"
+    exit 1
+  fi
+
   msg_ok "PostgreSQL installé et démarré avec succès"
 }
+
 
 function locate_pg_hba_conf() {
   msg_info "Recherche du fichier pg_hba.conf"
