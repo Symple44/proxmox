@@ -15,7 +15,7 @@ EOF
 
 header_info
 APP="Superset"
-var_disk="10"
+var_disk="20"
 var_cpu="4"
 var_ram="4096"
 var_os="debian"
@@ -48,66 +48,88 @@ function default_settings() {
   echo_default
 }
 
-function install_superset() {
-  header_info
-  msg_info "Installing dependencies inside the container"
+function check_network() {
+  msg_info "Checking network connectivity"
+  pct exec $CTID -- bash -c "ping -c 4 8.8.8.8 >/dev/null 2>&1"
+  if [ $? -ne 0 ]; then
+    msg_error "No network connectivity in the container. Please check your Proxmox network settings."
+    exit 1
+  fi
+  pct exec $CTID -- bash -c "ping -c 4 deb.debian.org >/dev/null 2>&1"
+  if [ $? -ne 0 ]; then
+    msg_warn "DNS resolution failed. Setting a fallback DNS to Google."
+    pct exec $CTID -- bash -c "echo 'nameserver 8.8.8.8' > /etc/resolv.conf"
+  fi
+  msg_ok "Network connectivity verified"
+}
 
-  # Mise à jour des paquets système
-  pct exec $CTID -- bash -c "apt update && apt upgrade -y"
+function install_dependencies() {
+  msg_info "Installing system dependencies"
+  pct exec $CTID -- bash -c "apt update && apt install -y build-essential libssl-dev libffi-dev python3 python3-pip python3-dev \
+    libsasl2-dev libldap2-dev python3.11-venv redis-server libpq-dev mariadb-client libmariadb-dev libmariadb-dev-compat \
+    freetds-dev unixodbc-dev curl postgresql"
+  if [ $? -ne 0 ]; then
+    msg_error "Failed to install dependencies. Check the network or package repository."
+    exit 1
+  fi
+  msg_ok "System dependencies installed successfully"
+}
 
-  # Installation des dépendances système
-  pct exec $CTID -- bash -c "apt install -y build-essential libssl-dev libffi-dev python3 python3-pip python3-dev \
-    libsasl2-dev libldap2-dev python3.11-venv redis-server libpq-dev mariadb-client mariadb-server libmariadb-dev libmariadb-dev-compat"
+function configure_postgresql() {
+  msg_info "Configuring PostgreSQL database for Superset"
+  pct exec $CTID -- bash -c "systemctl enable postgresql && systemctl start postgresql"
+  pct exec $CTID -- bash -c "sudo -u postgres psql -c 'CREATE DATABASE superset;'"
+  pct exec $CTID -- bash -c "sudo -u postgres psql -c \"CREATE USER superset_user WITH PASSWORD 'password';\""
+  pct exec $CTID -- bash -c "sudo -u postgres psql -c 'GRANT ALL PRIVILEGES ON DATABASE superset TO superset_user;'"
+  if [ $? -ne 0 ]; then
+    msg_error "Failed to configure PostgreSQL database"
+    exit 1
+  fi
+  msg_ok "PostgreSQL database configured successfully"
+}
 
-  # Vérification de Redis
+function configure_redis() {
   msg_info "Starting Redis service"
   pct exec $CTID -- bash -c "systemctl enable redis-server && systemctl start redis-server"
-  pct exec $CTID -- bash -c "systemctl is-active --quiet redis-server && echo 'Redis is running' || (echo 'Redis failed to start'; exit 1)"
   pct exec $CTID -- bash -c "redis-cli -h localhost -p 6379 ping || (echo 'Redis connection failed'; exit 1)"
   if [ $? -ne 0 ]; then
-    msg_error "Redis setup failed"
+    msg_error "Failed to start or connect to Redis"
     exit 1
   fi
   msg_ok "Redis service is running and responsive"
+}
 
-  # Création de l'environnement virtuel Python
-  msg_info "Creating Python virtual environment for Superset"
+function setup_python_venv() {
+  msg_info "Creating Python virtual environment"
   pct exec $CTID -- bash -c "python3 -m venv /opt/superset-venv"
   pct exec $CTID -- bash -c "source /opt/superset-venv/bin/activate && pip install --upgrade pip setuptools wheel"
   if [ $? -ne 0 ]; then
-    msg_error "Failed to create or upgrade Python virtual environment"
+    msg_error "Failed to set up Python virtual environment"
     exit 1
   fi
   msg_ok "Python virtual environment created successfully"
+}
 
-  # Installation de Superset et des bibliothèques nécessaires
-  msg_info "Installing Superset and related libraries"
+function install_superset_libraries() {
+  msg_info "Installing Superset and Python libraries"
   pct exec $CTID -- bash -c "source /opt/superset-venv/bin/activate && \
-    MYSQLCLIENT_CFLAGS='-I/usr/include/mariadb' MYSQLCLIENT_LDFLAGS='-L/usr/lib/x86_64-linux-gnu/' \
-    pip install apache-superset pillow cachelib[redis] mysqlclient psycopg2-binary"
+    pip install apache-superset pillow cachelib[redis] mysqlclient psycopg2-binary pymssql"
   if [ $? -ne 0 ]; then
-    msg_error "Failed to install Superset and required libraries"
+    msg_error "Failed to install Superset or required libraries"
     exit 1
   fi
-  msg_ok "Superset and related libraries installed successfully"
+  msg_ok "Superset and libraries installed successfully"
+}
 
-  # Génération d'une clé SECRET_KEY sécurisée
+function configure_superset() {
   msg_info "Configuring Superset"
   SECRET_KEY=$(openssl rand -base64 42)
   pct exec $CTID -- bash -c "mkdir -p /root/.superset"
   pct exec $CTID -- bash -c "cat <<EOF > /root/.superset/superset_config.py
 from cachelib.redis import RedisCache
 
-# Clé secrète pour sécuriser les sessions
 SECRET_KEY = '$SECRET_KEY'
-
-# Exemple de configuration pour PostgreSQL
-SQLALCHEMY_DATABASE_URI = 'postgresql+psycopg2://superset_user:votre_mot_de_passe@localhost/superset'
-
-# Exemple de configuration pour MySQL
-# SQLALCHEMY_DATABASE_URI = 'mysql+pymysql://superset_user:votre_mot_de_passe@your_mysql_server:3306/superset'
-
-# Configuration du cache
+SQLALCHEMY_DATABASE_URI = 'postgresql+psycopg2://superset_user:password@localhost/superset'
 CACHE_CONFIG = {
     'CACHE_TYPE': 'RedisCache',
     'CACHE_DEFAULT_TIMEOUT': 300,
@@ -117,20 +139,17 @@ CACHE_CONFIG = {
     'CACHE_REDIS_DB': 1,
     'CACHE_REDIS_PASSWORD': None,
 }
-
-# Timeout pour les requêtes
 SUPERSET_WEBSERVER_TIMEOUT = 60
-
-# Configuration Mapbox (optionnel, ajouter une clé API si nécessaire)
 MAPBOX_API_KEY = ''
 EOF"
   if [ $? -ne 0 ]; then
     msg_error "Failed to create Superset configuration"
     exit 1
   fi
-  msg_ok "Superset configuration created with a secure SECRET_KEY"
+  msg_ok "Superset configured successfully"
+}
 
-  # Initialisation de la base de données
+function initialize_superset() {
   msg_info "Initializing Superset database"
   pct exec $CTID -- bash -c "source /opt/superset-venv/bin/activate && \
     export FLASK_APP=superset && export SUPERSET_CONFIG_PATH=/root/.superset/superset_config.py && superset db upgrade"
@@ -140,8 +159,7 @@ EOF"
   fi
   msg_ok "Superset database initialized successfully"
 
-  # Création de l'utilisateur administrateur
-  msg_info "Creating admin user for Superset"
+  msg_info "Creating admin user"
   pct exec $CTID -- bash -c "source /opt/superset-venv/bin/activate && \
     export FLASK_APP=superset && export SUPERSET_CONFIG_PATH=/root/.superset/superset_config.py && superset fab create-admin \
     --username admin --firstname Admin --lastname User --email admin@example.com --password admin"
@@ -150,75 +168,25 @@ EOF"
     exit 1
   fi
   msg_ok "Admin user created successfully"
-
-  # Chargement des exemples de données
-  msg_info "Loading example data into Superset"
-  pct exec $CTID -- bash -c "source /opt/superset-venv/bin/activate && \
-    export FLASK_APP=superset && export SUPERSET_CONFIG_PATH=/root/.superset/superset_config.py && superset load_examples"
-  if [ $? -ne 0 ]; then
-    msg_error "Failed to load example data"
-    exit 1
-  fi
-  msg_ok "Example data loaded into Superset"
-
-  # Configuration du service systemd
-  msg_info "Creating systemd service for Superset"
-  pct exec $CTID -- bash -c "cat <<EOF >/etc/systemd/system/superset.service
-[Unit]
-Description=Apache Superset
-After=network.target
-
-[Service]
-User=root
-Group=root
-WorkingDirectory=/opt/superset-venv
-Environment=\"PATH=/opt/superset-venv/bin\"
-Environment=\"FLASK_APP=superset\"
-Environment=\"SUPERSET_CONFIG_PATH=/root/.superset/superset_config.py\"
-ExecStart=/opt/superset-venv/bin/gunicorn --workers 4 --timeout 120 --bind 0.0.0.0:8088 \"superset.app:create_app()\"
-Restart=always
-
-[Install]
-WantedBy=multi-user.target
-EOF"
-  pct exec $CTID -- bash -c "systemctl daemon-reload && systemctl enable superset && systemctl start superset"
-  if [ $? -ne 0 ]; then
-    msg_error "Failed to create and start Superset systemd service"
-    exit 1
-  fi
-  msg_ok "Superset systemd service created and started successfully"
 }
 
-
-
-function motd_ssh_custom() {
-  msg_info "Customizing MOTD and SSH access"
-  # Customize MOTD with Superset specific message
-  pct exec $CTID -- bash -c "echo 'Welcome to your Superset LXC container!' > /etc/motd"
-  
-  # Set up auto-login for root on tty1
-  pct exec $CTID -- mkdir -p /etc/systemd/system/container-getty@1.service.d
-  pct exec $CTID -- bash -c "cat <<EOF >/etc/systemd/system/container-getty@1.service.d/override.conf
-[Service]
-ExecStart=
-ExecStart=-/sbin/agetty --autologin root --noclear --keep-baud tty%I 115200,38400,9600 \\$TERM
-EOF"
-
-  # Reload systemd and restart getty service to apply auto-login
-  pct exec $CTID -- systemctl daemon-reload
-  pct exec $CTID -- systemctl restart container-getty@1.service
-  msg_ok "MOTD and SSH access customized"
+function main() {
+  check_network
+  install_dependencies
+  configure_postgresql
+  configure_redis
+  setup_python_venv
+  install_superset_libraries
+  configure_superset
+  initialize_superset
 }
 
 header_info
 start
 build_container
-install_superset
+main
 motd_ssh_custom
 description
 
-# Using the IP variable set by description function to display the final message
-msg_ok "Completed Successfully!\n"
-echo -e "${APP} should be reachable by going to the following URL:
-         ${BL}http://${IP}:8088${CL} \n"
-echo -e "Aucun accès SSH n'est nécessaire pour administrer le conteneur depuis le nœud Proxmox."
+msg_ok "Superset installation completed successfully!"
+echo -e "Access Superset at: ${BL}http://${IP}:8088${CL}"
