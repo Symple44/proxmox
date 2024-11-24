@@ -4,12 +4,12 @@ source <(curl -s https://raw.githubusercontent.com/tteck/Proxmox/main/misc/build
 function header_info {
   clear
   cat <<"EOF"
-    _____                              __   
-   / ___/____ ___  ____ _____  ____ _/ /__ 
-   \__ \/ __ __ \/ __ / __ \/ __ / / _ \
-  ___/ / / / / / /_/ / / / / / /_/ / /  __/
- /____/_/ /_/ /_/\__,_/_/ /_/\__, /_/\___/ 
-                             /____/         
+   _____             __ 
+  / ___/____ ___  ____ _____  ____ _/ /__
+  \__ \/ __ `/ / / / / __ \/ __ `/ / _ \
+ ___/ / /_/ / /_/ / / / / / /_/ / /  __/
+/____/\__,_/\__,_/_/ /_/\__, /_/\___/ 
+                        /____/          
 EOF
 }
 
@@ -49,53 +49,57 @@ function default_settings() {
 }
 
 function configure_locales() {
-  msg_info "Configuring locales in the container"
-  
-  # Installer locales et générer en_US.UTF-8
+  msg_info "Configuration des paramètres régionaux dans le conteneur"
+
+  # Réinstaller les paramètres régionaux pour assurer une configuration propre
   pct exec $CTID -- bash -c "apt install -y locales"
+
+  # Définir les paramètres régionaux par défaut
   pct exec $CTID -- bash -c "echo 'LANG=en_US.UTF-8' > /etc/default/locale"
   pct exec $CTID -- bash -c "echo 'en_US.UTF-8 UTF-8' >> /etc/locale.gen"
+
+  # Générer les paramètres régionaux
   pct exec $CTID -- bash -c "locale-gen en_US.UTF-8"
-  
   if [ $? -ne 0 ]; then
-    msg_error "Failed to configure locales"
+    msg_error "Échec de la configuration des paramètres régionaux"
     exit 1
   fi
-  
-  msg_ok "Locales configured successfully"
+
+  msg_ok "Paramètres régionaux configurés avec succès"
 }
 
 function install_dependencies() {
-  msg_info "Installing system dependencies"
+  msg_info "Installation des dépendances système"
   pct exec $CTID -- bash -c "apt update && apt install -y build-essential libssl-dev libffi-dev python3 python3-pip python3-dev \
     libsasl2-dev libldap2-dev python3.11-venv redis-server libpq-dev mariadb-client libmariadb-dev libmariadb-dev-compat \
     freetds-dev unixodbc-dev curl postgresql"
   if [ $? -ne 0 ]; then
-    msg_error "Failed to install dependencies. Check the network or package repository."
+    msg_error "Échec de l'installation des dépendances. Vérifiez le réseau ou le référentiel de packages."
     exit 1
   fi
-  msg_ok "System dependencies installed successfully"
+  msg_ok "Dépendances système installées avec succès"
 }
 
 function configure_pg_authentication() {
-  msg_info "Configuring PostgreSQL authentication"
+  msg_info "Configuration de l'authentification PostgreSQL"
 
-  # Modifier pg_hba.conf pour activer l'authentification md5
-  pct exec $CTID -- bash -c "sed -i 's/local\s*all\s*postgres\s*peer/local all postgres md5/' /etc/postgresql/*/main/pg_hba.conf"
+  # Modifier pg_hba.conf pour autoriser l'authentification scram-sha-256 (plus sécurisée)
+  pct exec $CTID -- bash -c "sed -i 's/local\s*all\s*postgres\s*peer/local all postgres scram-sha-256/' /etc/postgresql/*/main/pg_hba.conf"
   pct exec $CTID -- bash -c "systemctl restart postgresql"
 
-  # Définir un mot de passe pour l'utilisateur postgres
-  pct exec $CTID -- bash -c "psql -U postgres -c \"ALTER USER postgres PASSWORD 'postgres';\""
+  # Définir le mot de passe PostgreSQL (REMPLACEZ par un mot de passe fort !)
+  POSTGRES_PASSWORD="Superset2024!" 
+  pct exec $CTID -- bash -c "psql -U postgres -c \"ALTER USER postgres PASSWORD '$POSTGRES_PASSWORD';\""
   if [ $? -ne 0 ]; then
-    msg_error "Failed to configure PostgreSQL authentication"
+    msg_error "Échec de la configuration de l'authentification PostgreSQL"
     exit 1
   fi
 
-  msg_ok "PostgreSQL authentication configured successfully"
+  msg_ok "Authentification PostgreSQL configurée avec succès"
 }
 
 function configure_postgresql() {
-  msg_info "Configuring PostgreSQL database for Superset"
+  msg_info "Configuration de la base de données PostgreSQL pour Superset"
 
   # Activer et démarrer le service PostgreSQL
   pct exec $CTID -- bash -c "systemctl enable postgresql && systemctl start postgresql"
@@ -103,19 +107,58 @@ function configure_postgresql() {
   # Créer la base de données Superset
   pct exec $CTID -- bash -c "psql -U postgres -c 'CREATE DATABASE superset;'"
   if [ $? -ne 0 ]; then
-    msg_error "Failed to create the Superset database"
+    msg_error "Échec de la création de la base de données Superset"
     exit 1
   fi
 
+  # Définir le mot de passe de l'utilisateur Superset (REMPLACEZ par un mot de passe fort !)
+  SUPERSET_USER_PASSWORD="Superset2024!"
   # Créer et configurer l'utilisateur superset_user
-  pct exec $CTID -- bash -c "psql -U postgres -c \"CREATE USER superset_user WITH PASSWORD 'password';\""
+  pct exec $CTID -- bash -c "psql -U postgres -c \"CREATE USER superset_user WITH PASSWORD '$SUPERSET_USER_PASSWORD';\""
   pct exec $CTID -- bash -c "psql -U postgres -c 'GRANT ALL PRIVILEGES ON DATABASE superset TO superset_user;'"
   if [ $? -ne 0 ]; then
-    msg_error "Failed to configure the Superset user"
+    msg_error "Échec de la configuration de l'utilisateur Superset"
     exit 1
   fi
 
-  msg_ok "PostgreSQL database configured successfully"
+  msg_ok "Base de données PostgreSQL configurée avec succès"
+}
+
+function install_superset() {
+  msg_info "Installation d'Apache Superset"
+  pct exec $CTID -- bash -c "python3 -m venv venv"
+  pct exec $CTID -- bash -c "source venv/bin/activate && pip install apache-superset" 
+  if [ $? -ne 0 ]; then
+    msg_error "Échec de l'installation de Superset"
+    exit 1
+  fi
+  msg_ok "Apache Superset installé avec succès"
+
+  # Initialiser Superset
+  msg_info "Initialisation de Superset"
+  pct exec $CTID -- bash -c "source venv/bin/activate && superset db upgrade"
+  if [ $? -ne 0 ]; then
+    msg_error "Échec de la mise à niveau de la base de données Superset"
+    exit 1
+  fi
+
+  pct exec $CTID -- bash -c "source venv/bin/activate && superset fab create-admin \
+    --username admin \
+    --firstname Admin \
+    --lastname User \
+    --email admin@example.com \
+    --password Superset2024!" # REMPLACEZ par un mot de passe fort !
+  if [ $? -ne 0 ]; then
+    msg_error "Échec de la création de l'utilisateur administrateur Superset"
+    exit 1
+  fi
+
+  pct exec $CTID -- bash -c "source venv/bin/activate && superset init"
+  if [ $? -ne 0 ]; then
+    msg_error "Échec de l'initialisation de Superset"
+    exit 1
+  fi
+  msg_ok "Superset initialisé avec succès"
 }
 
 function main() {
@@ -123,6 +166,7 @@ function main() {
   configure_locales
   configure_pg_authentication
   configure_postgresql
+  install_superset
 }
 
 header_info
@@ -132,5 +176,5 @@ main
 motd_ssh_custom
 description
 
-msg_ok "Superset installation completed successfully!"
-echo -e "Access Superset at: ${BL}http://${IP}:8088${CL}"
+msg_ok "Installation de Superset terminée avec succès!"
+echo -e "Accédez à Superset à l'adresse : ${BL}http://${IP}:8088${CL}"
