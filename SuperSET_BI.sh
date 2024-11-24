@@ -37,7 +37,7 @@ function default_settings() {
   RAM_SIZE="$var_ram"
   BRG="vmbr0"
   NET="dhcp"
-  GATE=" "
+  GATE=""
   APT_CACHER=""
   APT_CACHER_IP=""
   DISABLEIP6="no"
