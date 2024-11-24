@@ -122,18 +122,21 @@ function configure_pg_hba() {
 function configure_postgresql() {
   msg_info "Configuration de la base de données PostgreSQL pour Superset"
 
-  pct exec $CTID -- bash -c "psql -U postgres -c \"ALTER USER postgres WITH PASSWORD '$POSTGRES_PASSWORD';\""
+  # Définir le mot de passe PostgreSQL
+  pct exec $CTID -- bash -c "/usr/bin/psql -U postgres -c \"ALTER USER postgres WITH PASSWORD '$POSTGRES_PASSWORD';\""
   if [ $? -ne 0 ]; then
-    msg_error "Échec de la configuration du mot de passe PostgreSQL"
+    msg_error "Échec de la configuration du mot de passe PostgreSQL. Vérifiez l'authentification et pg_hba.conf."
     exit 1
   fi
 
+  # Créer la base de données Superset
   pct exec $CTID -- bash -c "psql -U postgres -c 'CREATE DATABASE superset;'"
   if [ $? -ne 0 ]; then
     msg_error "Échec de la création de la base de données Superset"
     exit 1
   fi
 
+  # Créer un utilisateur dédié pour Superset
   pct exec $CTID -- bash -c "psql -U postgres -c \"CREATE USER superset_user WITH PASSWORD '$SUPERSET_USER_PASSWORD';\""
   pct exec $CTID -- bash -c "psql -U postgres -c 'GRANT ALL PRIVILEGES ON DATABASE superset TO superset_user;'"
 
