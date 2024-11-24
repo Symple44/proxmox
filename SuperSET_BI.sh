@@ -20,6 +20,9 @@ var_cpu="4"
 var_ram="4096"
 var_os="debian"
 var_version="12"
+POSTGRES_PASSWORD="Superset2024!"
+SUPERSET_USER_PASSWORD="Superset2024!"
+ADMIN_PASSWORD="Superset2024!"
 variables
 color
 catch_errors
@@ -51,15 +54,11 @@ function default_settings() {
 function configure_locales() {
   msg_info "Configuration des paramètres régionaux dans le conteneur"
 
-  # Réinstaller les paramètres régionaux pour assurer une configuration propre
   pct exec $CTID -- bash -c "apt install -y locales"
-
-  # Définir les paramètres régionaux par défaut
   pct exec $CTID -- bash -c "echo 'LANG=en_US.UTF-8' > /etc/default/locale"
   pct exec $CTID -- bash -c "echo 'en_US.UTF-8 UTF-8' >> /etc/locale.gen"
-
-  # Générer les paramètres régionaux
   pct exec $CTID -- bash -c "locale-gen en_US.UTF-8"
+
   if [ $? -ne 0 ]; then
     msg_error "Échec de la configuration des paramètres régionaux"
     exit 1
@@ -74,7 +73,7 @@ function install_dependencies() {
     libsasl2-dev libldap2-dev python3.11-venv redis-server libpq-dev mariadb-client libmariadb-dev libmariadb-dev-compat \
     freetds-dev unixodbc-dev curl postgresql"
   if [ $? -ne 0 ]; then
-    msg_error "Échec de l'installation des dépendances. Vérifiez le réseau ou le référentiel de packages."
+    msg_error "Échec de l'installation des dépendances"
     exit 1
   fi
   msg_ok "Dépendances système installées avec succès"
@@ -83,13 +82,10 @@ function install_dependencies() {
 function configure_pg_authentication() {
   msg_info "Configuration de l'authentification PostgreSQL"
 
-  # Modifier pg_hba.conf pour autoriser l'authentification scram-sha-256 (plus sécurisée)
   pct exec $CTID -- bash -c "sed -i 's/local\s*all\s*postgres\s*peer/local all postgres scram-sha-256/' /etc/postgresql/*/main/pg_hba.conf"
   pct exec $CTID -- bash -c "systemctl restart postgresql"
 
-  # Définir le mot de passe PostgreSQL (REMPLACEZ par un mot de passe fort !)
-  POSTGRES_PASSWORD="Superset2024!"
-  pct exec $CTID -- bash -c "psql -U postgres -c \"ALTER USER postgres WITH PASSWORD '$POSTGRES_PASSWORD';\"" 
+  pct exec $CTID -- bash -c "psql -U postgres -c \"ALTER USER postgres WITH PASSWORD '$POSTGRES_PASSWORD';\""
   if [ $? -ne 0 ]; then
     msg_error "Échec de la configuration de l'authentification PostgreSQL"
     exit 1
@@ -101,21 +97,17 @@ function configure_pg_authentication() {
 function configure_postgresql() {
   msg_info "Configuration de la base de données PostgreSQL pour Superset"
 
-  # Activer et démarrer le service PostgreSQL
   pct exec $CTID -- bash -c "systemctl enable postgresql && systemctl start postgresql"
 
-  # Créer la base de données Superset
   pct exec $CTID -- bash -c "psql -U postgres -c 'CREATE DATABASE superset;'"
   if [ $? -ne 0 ]; then
     msg_error "Échec de la création de la base de données Superset"
     exit 1
   fi
 
-  # Définir le mot de passe de l'utilisateur Superset (REMPLACEZ par un mot de passe fort !)
-  SUPERSET_USER_PASSWORD="Superset2024!"
-  # Créer et configurer l'utilisateur superset_user
   pct exec $CTID -- bash -c "psql -U postgres -c \"CREATE USER superset_user WITH PASSWORD '$SUPERSET_USER_PASSWORD';\""
   pct exec $CTID -- bash -c "psql -U postgres -c 'GRANT ALL PRIVILEGES ON DATABASE superset TO superset_user;'"
+
   if [ $? -ne 0 ]; then
     msg_error "Échec de la configuration de l'utilisateur Superset"
     exit 1
@@ -126,34 +118,37 @@ function configure_postgresql() {
 
 function install_superset() {
   msg_info "Installation d'Apache Superset"
-  pct exec $CTID -- bash -c "python3 -m venv venv"
-  pct exec $CTID -- bash -c "source venv/bin/activate && pip install apache-superset" 
+
+  pct exec $CTID -- bash -c "python3 -m venv /opt/superset-venv"
+  pct exec $CTID -- bash -c "source /opt/superset-venv/bin/activate && pip install --upgrade pip && pip install apache-superset"
+
   if [ $? -ne 0 ]; then
     msg_error "Échec de l'installation de Superset"
     exit 1
   fi
   msg_ok "Apache Superset installé avec succès"
 
-  # Initialiser Superset
   msg_info "Initialisation de Superset"
-  pct exec $CTID -- bash -c "source venv/bin/activate && superset db upgrade"
+  pct exec $CTID -- bash -c "source /opt/superset-venv/bin/activate && superset db upgrade"
+
   if [ $? -ne 0 ]; then
     msg_error "Échec de la mise à niveau de la base de données Superset"
     exit 1
   fi
 
-  pct exec $CTID -- bash -c "source venv/bin/activate && superset fab create-admin \
+  pct exec $CTID -- bash -c "source /opt/superset-venv/bin/activate && superset fab create-admin \
     --username admin \
     --firstname Admin \
     --lastname User \
     --email admin@example.com \
-    --password Superset2024!" 
+    --password $ADMIN_PASSWORD"
+
   if [ $? -ne 0 ]; then
     msg_error "Échec de la création de l'utilisateur administrateur Superset"
     exit 1
   fi
 
-  pct exec $CTID -- bash -c "source venv/bin/activate && superset init"
+  pct exec $CTID -- bash -c "source /opt/superset-venv/bin/activate && superset init"
   if [ $? -ne 0 ]; then
     msg_error "Échec de l'initialisation de Superset"
     exit 1
