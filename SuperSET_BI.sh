@@ -51,18 +51,72 @@ function default_settings() {
   echo_default
 }
 
+function configure_locales() {
+  msg_info "Configuration des paramètres régionaux dans le conteneur"
+
+  pct exec $CTID -- bash -c "apt install -y locales"
+  pct exec $CTID -- bash -c "echo 'LANG=en_US.UTF-8' > /etc/default/locale"
+  pct exec $CTID -- bash -c "echo 'en_US.UTF-8 UTF-8' >> /etc/locale.gen"
+  pct exec $CTID -- bash -c "locale-gen en_US.UTF-8"
+
+  if [ $? -ne 0 ]; then
+    msg_error "Échec de la configuration des paramètres régionaux"
+    exit 1
+  fi
+
+  msg_ok "Paramètres régionaux configurés avec succès"
+}
+
+function install_dependencies() {
+  msg_info "Installation des dépendances système"
+  pct exec $CTID -- bash -c "apt update && apt install -y build-essential libssl-dev libffi-dev python3 python3-pip python3-dev \
+    libsasl2-dev libldap2-dev python3.11-venv redis-server libpq-dev mariadb-client libmariadb-dev libmariadb-dev-compat \
+    freetds-dev unixodbc-dev curl postgresql"
+  if [ $? -ne 0 ]; then
+    msg_error "Échec de l'installation des dépendances"
+    exit 1
+  fi
+  msg_ok "Dépendances système installées avec succès"
+}
+
+function install_postgresql() {
+  msg_info "Installation de PostgreSQL"
+
+  # Installer PostgreSQL si ce n'est pas déjà fait
+  pct exec $CTID -- bash -c "apt update && apt install -y postgresql"
+  if [ $? -ne 0 ]; then
+    msg_error "Échec de l'installation de PostgreSQL"
+    exit 1
+  fi
+
+  # Démarrer PostgreSQL pour initialiser les fichiers de configuration
+  pct exec $CTID -- bash -c "systemctl enable postgresql && systemctl start postgresql"
+  if [ $? -ne 0 ]; then
+    msg_error "Échec du démarrage de PostgreSQL"
+    exit 1
+  fi
+
+  msg_ok "PostgreSQL installé et démarré avec succès"
+}
+
 function locate_pg_hba_conf() {
   msg_info "Recherche du fichier pg_hba.conf"
+
+  # Localiser dynamiquement le fichier pg_hba.conf
   PGB_CONF_PATH=$(pct exec $CTID -- bash -c "find /etc/postgresql -name pg_hba.conf" | tr -d '\r')
   if [ -z "$PGB_CONF_PATH" ]; then
     msg_error "Fichier pg_hba.conf introuvable. Vérifiez l'installation de PostgreSQL."
     exit 1
   fi
+
   echo "$PGB_CONF_PATH"
 }
 
 function configure_pg_authentication() {
   msg_info "Configuration de l'authentification PostgreSQL"
+
+  # Assurez-vous que PostgreSQL est installé
+  install_postgresql
 
   # Localiser le fichier pg_hba.conf
   PGB_CONF_PATH=$(locate_pg_hba_conf)
@@ -83,8 +137,6 @@ function configure_pg_authentication() {
 
 function configure_postgresql() {
   msg_info "Configuration de la base de données PostgreSQL pour Superset"
-
-  pct exec $CTID -- bash -c "systemctl enable postgresql && systemctl start postgresql"
 
   pct exec $CTID -- bash -c "psql -U postgres -c 'CREATE DATABASE superset;'"
   if [ $? -ne 0 ]; then
@@ -144,6 +196,8 @@ function install_superset() {
 }
 
 function main() {
+  install_dependencies
+  configure_locales
   configure_pg_authentication
   configure_postgresql
   install_superset
