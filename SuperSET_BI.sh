@@ -88,8 +88,8 @@ function configure_pg_authentication() {
   pct exec $CTID -- bash -c "systemctl restart postgresql"
 
   # Définir le mot de passe PostgreSQL (REMPLACEZ par un mot de passe fort !)
-  POSTGRES_PASSWORD="Superset2024!" 
-  pct exec $CTID -- bash -c "psql -U postgres -c \"ALTER USER postgres PASSWORD '$POSTGRES_PASSWORD';\""
+  POSTGRES_PASSWORD="Superset2024!"
+  pct exec $CTID -- bash -c "psql -U postgres -c \"ALTER USER postgres WITH PASSWORD '$POSTGRES_PASSWORD';\"" 
   if [ $? -ne 0 ]; then
     msg_error "Échec de la configuration de l'authentification PostgreSQL"
     exit 1
@@ -147,7 +147,7 @@ function install_superset() {
     --firstname Admin \
     --lastname User \
     --email admin@example.com \
-    --password Superset2024!" # REMPLACEZ par un mot de passe fort !
+    --password Superset2024!" 
   if [ $? -ne 0 ]; then
     msg_error "Échec de la création de l'utilisateur administrateur Superset"
     exit 1
