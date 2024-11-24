@@ -67,16 +67,6 @@ function configure_locales() {
 function install_dependencies() {
   msg_info "Installation des dépendances système"
 
-  # Vérifiez la connectivité réseau
-  pct exec $CTID -- bash -c "ping -c 1 8.8.8.8"
-  if [ $? -ne 0 ]; then
-    msg_error "Pas de connectivité réseau dans le conteneur. Vérifiez vos paramètres réseau."
-    exit 1
-  fi
-
-  # Ajouter un serveur DNS explicite
-  pct exec $CTID -- bash -c "echo 'nameserver 8.8.8.8' > /etc/resolv.conf"
-
   # Forcer la mise à jour des paquets
   pct exec $CTID -- bash -c "apt-get update --fix-missing"
   if [ $? -ne 0 ]; then
