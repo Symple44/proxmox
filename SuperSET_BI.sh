@@ -66,7 +66,6 @@ function configure_locales() {
 
 function install_dependencies() {
   msg_info "Installation des dépendances système"
-
   # Forcer la mise à jour des paquets
   pct exec $CTID -- bash -c "apt-get update --fix-missing"
   if [ $? -ne 0 ]; then
