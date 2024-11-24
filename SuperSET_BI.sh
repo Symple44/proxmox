@@ -20,9 +20,9 @@ var_cpu="4"
 var_ram="4096"
 var_os="debian"
 var_version="12"
-POSTGRES_PASSWORD="Superset2024!"
-SUPERSET_USER_PASSWORD="Superset2024!"
-ADMIN_PASSWORD="Superset2024!"
+POSTGRES_PASSWORD="SuperSET2024!"
+SUPERSET_USER_PASSWORD="SuperSET2024!"
+ADMIN_PASSWORD="SuperSET2024!"
 variables
 color
 catch_errors
@@ -51,9 +51,18 @@ function default_settings() {
   echo_default
 }
 
+function get_ip() {
+  IP=$(pct exec $CT_ID -- hostname -I | awk '{print $1}')
+  if [ -z "$IP" ]; then
+    msg_error "Impossible de récupérer l'adresse IP"
+    exit 1
+  fi
+}
+
 start
 build_container
 install_script
 
-msg_ok "Installation de Superset terminée avec succès!"
-echo -e "Accédez à Superset à l'adresse : ${BL}http://${IP}:8088${CL}"
+get_ip
+msg_ok "Installation de SuperSET_BI terminée avec succès!"
+echo -e "Accédez à SuperSET_BI à l'adresse : http://${IP}:8088"
