@@ -51,14 +51,10 @@ function default_settings() {
 function configure_locales() {
   msg_info "Configuring locales in the container"
   
-  # Réinstalle locales pour assurer une configuration propre
+  # Installer locales et générer en_US.UTF-8
   pct exec $CTID -- bash -c "apt install -y locales"
-  
-  # Définir la locale par défaut
   pct exec $CTID -- bash -c "echo 'LANG=en_US.UTF-8' > /etc/default/locale"
   pct exec $CTID -- bash -c "echo 'en_US.UTF-8 UTF-8' >> /etc/locale.gen"
-  
-  # Générer la locale
   pct exec $CTID -- bash -c "locale-gen en_US.UTF-8"
   
   if [ $? -ne 0 ]; then
@@ -84,7 +80,7 @@ function install_dependencies() {
 function configure_pg_authentication() {
   msg_info "Configuring PostgreSQL authentication"
 
-  # Modifier pg_hba.conf pour autoriser md5 authentication
+  # Modifier pg_hba.conf pour activer l'authentification md5
   pct exec $CTID -- bash -c "sed -i 's/local\s*all\s*postgres\s*peer/local all postgres md5/' /etc/postgresql/*/main/pg_hba.conf"
   pct exec $CTID -- bash -c "systemctl restart postgresql"
 
@@ -101,21 +97,17 @@ function configure_pg_authentication() {
 function configure_postgresql() {
   msg_info "Configuring PostgreSQL database for Superset"
 
-  # Start PostgreSQL service
+  # Activer et démarrer le service PostgreSQL
   pct exec $CTID -- bash -c "systemctl enable postgresql && systemctl start postgresql"
 
-  # Ensure the postgres user exists
-  pct exec $CTID -- bash -c "psql -U postgres -c '\du'" || \
-    pct exec $CTID -- bash -c "createuser --superuser postgres"
-
-  # Create Superset database
+  # Créer la base de données Superset
   pct exec $CTID -- bash -c "psql -U postgres -c 'CREATE DATABASE superset;'"
   if [ $? -ne 0 ]; then
     msg_error "Failed to create the Superset database"
     exit 1
   fi
 
-  # Create and configure the superset_user
+  # Créer et configurer l'utilisateur superset_user
   pct exec $CTID -- bash -c "psql -U postgres -c \"CREATE USER superset_user WITH PASSWORD 'password';\""
   pct exec $CTID -- bash -c "psql -U postgres -c 'GRANT ALL PRIVILEGES ON DATABASE superset TO superset_user;'"
   if [ $? -ne 0 ]; then
