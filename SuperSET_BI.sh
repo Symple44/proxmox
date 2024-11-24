@@ -65,6 +65,7 @@ function configure_locales() {
 }
 
 function install_dependencies() {
+  header_info
   msg_info "Installation des dépendances système"
   # Forcer la mise à jour des paquets
   pct exec $CTID -- bash -c "apt-get update --fix-missing"
@@ -75,7 +76,8 @@ function install_dependencies() {
 
   # Ajout d'un délai pour permettre aux services réseau de se stabiliser
   sleep 10
-
+  
+  pct exec $CTID -- bash -c "apt update && apt upgrade -y"
   # Installer les dépendances
   pct exec $CTID -- bash -c "apt-get install -y build-essential libssl-dev libffi-dev python3 python3-pip python3-dev \
     libsasl2-dev libldap2-dev python3.11-venv redis-server libpq-dev mariadb-client libmariadb-dev libmariadb-dev-compat \
