@@ -66,16 +66,38 @@ function configure_locales() {
 
 function install_dependencies() {
   msg_info "Installation des dépendances système"
-  pct exec $CTID -- bash -c "apt update && apt upgrade -y"
-  pct exec $CTID -- bash -c "apt install -y build-essential libssl-dev libffi-dev python3 python3-pip python3-dev \
+
+  # Vérifiez la connectivité réseau
+  pct exec $CTID -- bash -c "ping -c 1 8.8.8.8"
+  if [ $? -ne 0 ]; then
+    msg_error "Pas de connectivité réseau dans le conteneur. Vérifiez vos paramètres réseau."
+    exit 1
+  fi
+
+  # Ajouter un serveur DNS explicite
+  pct exec $CTID -- bash -c "echo 'nameserver 8.8.8.8' > /etc/resolv.conf"
+
+  # Forcer la mise à jour des paquets
+  pct exec $CTID -- bash -c "apt-get update --fix-missing"
+  if [ $? -ne 0 ]; then
+    msg_error "Échec de la mise à jour du cache APT"
+    exit 1
+  fi
+
+  # Ajout d'un délai pour permettre aux services réseau de se stabiliser
+  sleep 10
+
+  # Installer les dépendances
+  pct exec $CTID -- bash -c "apt-get install -y build-essential libssl-dev libffi-dev python3 python3-pip python3-dev \
     libsasl2-dev libldap2-dev python3.11-venv redis-server libpq-dev mariadb-client libmariadb-dev libmariadb-dev-compat \
-    freetds-dev unixodbc-dev curl postgresql locales"
+    freetds-dev unixodbc-dev curl postgresql locales --fix-missing"
   if [ $? -ne 0 ]; then
     msg_error "Échec de l'installation des dépendances"
     exit 1
   fi
   msg_ok "Dépendances système installées avec succès"
 }
+
 
 function install_postgresql() {
   msg_info "Installation et démarrage de PostgreSQL"
