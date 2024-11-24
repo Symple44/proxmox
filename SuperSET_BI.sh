@@ -171,7 +171,7 @@ function initialize_superset() {
 }
 
 function main() {
-  check_network
+  
   install_dependencies
   configure_postgresql
   configure_redis
