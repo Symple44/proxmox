@@ -1,11 +1,5 @@
 #!/usr/bin/env bash
 
-set -e
-
-POSTGRES_PASSWORD="Superset2024!"
-SUPERSET_USER_PASSWORD="Superset2024!"
-ADMIN_PASSWORD="Superset2024!"
-
 color
 verb_ip6
 catch_errors
