@@ -48,21 +48,6 @@ function default_settings() {
   echo_default
 }
 
-function check_network() {
-  msg_info "Checking network connectivity"
-  pct exec $CTID -- bash -c "ping -c 4 8.8.8.8 >/dev/null 2>&1"
-  if [ $? -ne 0 ]; then
-    msg_error "No network connectivity in the container. Please check your Proxmox network settings."
-    exit 1
-  fi
-  pct exec $CTID -- bash -c "ping -c 4 deb.debian.org >/dev/null 2>&1"
-  if [ $? -ne 0 ]; then
-    msg_warn "DNS resolution failed. Setting a fallback DNS to Google."
-    pct exec $CTID -- bash -c "echo 'nameserver 8.8.8.8' > /etc/resolv.conf"
-  fi
-  msg_ok "Network connectivity verified"
-}
-
 function install_dependencies() {
   msg_info "Installing system dependencies"
   pct exec $CTID -- bash -c "apt update && apt install -y build-essential libssl-dev libffi-dev python3 python3-pip python3-dev \
