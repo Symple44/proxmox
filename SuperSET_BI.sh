@@ -51,11 +51,24 @@ function default_settings() {
   echo_default
 }
 
+function locate_pg_hba_conf() {
+  msg_info "Recherche du fichier pg_hba.conf"
+  PGB_CONF_PATH=$(pct exec $CTID -- bash -c "find /etc/postgresql -name pg_hba.conf" | tr -d '\r')
+  if [ -z "$PGB_CONF_PATH" ]; then
+    msg_error "Fichier pg_hba.conf introuvable. Vérifiez l'installation de PostgreSQL."
+    exit 1
+  fi
+  echo "$PGB_CONF_PATH"
+}
+
 function configure_pg_authentication() {
   msg_info "Configuration de l'authentification PostgreSQL"
 
-  # Modifier pg_hba.conf pour activer l'authentification scram-sha-256
-  pct exec $CTID -- bash -c "sed -i 's/local\s*all\s*postgres\s*peer/local all postgres scram-sha-256/' /etc/postgresql/*/main/pg_hba.conf"
+  # Localiser le fichier pg_hba.conf
+  PGB_CONF_PATH=$(locate_pg_hba_conf)
+
+  # Modifier pg_hba.conf pour activer scram-sha-256
+  pct exec $CTID -- bash -c "sed -i 's/local\s*all\s*postgres\s*peer/local all postgres scram-sha-256/' $PGB_CONF_PATH"
   pct exec $CTID -- bash -c "systemctl restart postgresql"
 
   # Définir le mot de passe PostgreSQL
