@@ -153,17 +153,56 @@ EOF"
   msg_ok "Superset initialisé avec succès"
 }
 
+function configure_firewall() {
+  msg_info "Configuration du pare-feu et autorisation du port 8088"
+  pct exec $CTID -- bash -c "apt install -y ufw && ufw allow 8088 && ufw --force enable"
+  if [ $? -ne 0 ]; then
+    msg_error "Échec de la configuration du pare-feu"
+    exit 1
+  fi
+  msg_ok "Pare-feu configuré avec succès"
+}
+
+function motd_ssh_custom() {
+  msg_info "Personnalisation du MOTD et configuration de l'accès SSH"
+  
+  # Personnaliser le message MOTD avec un message spécifique à Superset
+  pct exec $CTID -- bash -c "echo 'Bienvenue dans votre conteneur Superset LXC !' > /etc/motd"
+  
+  # Configurer la connexion automatique pour root sur tty1
+  pct exec $CTID -- bash -c "mkdir -p /etc/systemd/system/container-getty@1.service.d"
+  pct exec $CTID -- bash -c "cat <<EOF >/etc/systemd/system/container-getty@1.service.d/override.conf
+[Service]
+ExecStart=
+ExecStart=-/sbin/agetty --autologin root --noclear --keep-baud tty%I 115200,38400,9600 \\$TERM
+EOF"
+
+  # Recharger systemd et appliquer les changements
+  pct exec $CTID -- systemctl daemon-reload
+  pct exec $CTID -- systemctl restart container-getty@1.service
+  if [ $? -ne 0 ]; then
+    msg_error "Échec de la personnalisation du MOTD ou de la configuration SSH"
+    exit 1
+  fi
+
+  msg_ok "MOTD et accès SSH personnalisés avec succès"
+}
+
+
 function main() {
-  default_settings
-  start
-  build_container
   install_dependencies
   configure_locales
   configure_postgresql
   install_superset
+  configure_firewall
 }
 
 header_info
+start
+build_container
 main
+motd_ssh_custom
+description
+
 msg_ok "Installation de Superset terminée avec succès!"
 echo -e "Accédez à Superset à l'adresse : ${BL}http://${IP}:8088${CL}"
