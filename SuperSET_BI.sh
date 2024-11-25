@@ -85,25 +85,46 @@ function install_dependencies() {
 function configure_postgresql() {
   msg_info "Configuration de PostgreSQL"
 
-  # Configurer la base de données PostgreSQL
+  # Vérification des variables requises
+  if [ -z "$POSTGRES_DB" ] || [ -z "$POSTGRES_USER" ] || [ -z "$POSTGRES_PASSWORD" ]; then
+    msg_error "Variables PostgreSQL manquantes"
+    return 1
+  }
+
+  # Vérification que PostgreSQL est démarré
+  if ! pct exec $CTID -- systemctl is-active postgresql >/dev/null; then
+    msg_error "PostgreSQL n'est pas démarré"
+    return 1
+  }
+
+  # Échappement des variables
+  POSTGRES_DB_ESCAPED=$(echo "$POSTGRES_DB" | sed 's/"/\\"/g')
+  POSTGRES_USER_ESCAPED=$(echo "$POSTGRES_USER" | sed 's/"/\\"/g')
+  POSTGRES_PASSWORD_ESCAPED=$(echo "$POSTGRES_PASSWORD" | sed 's/'/'\\''/g')
+
+  # Configuration de la base de données
   pct exec $CTID -- bash -c "su - postgres -c \"psql <<EOF
-CREATE DATABASE $POSTGRES_DB;
-CREATE USER $POSTGRES_USER WITH PASSWORD '$POSTGRES_PASSWORD';
-GRANT ALL PRIVILEGES ON DATABASE $POSTGRES_DB TO $POSTGRES_USER;
+CREATE DATABASE \"$POSTGRES_DB_ESCAPED\";
+CREATE USER \"$POSTGRES_USER_ESCAPED\" WITH PASSWORD '$POSTGRES_PASSWORD_ESCAPED';
+GRANT ALL PRIVILEGES ON DATABASE \"$POSTGRES_DB_ESCAPED\" TO \"$POSTGRES_USER_ESCAPED\";
 
 -- Permissions sur le schéma public
-ALTER SCHEMA public OWNER TO $POSTGRES_USER;
-GRANT ALL ON SCHEMA public TO $POSTGRES_USER;
-GRANT USAGE, CREATE ON SCHEMA public TO $POSTGRES_USER;
-ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO $POSTGRES_USER;
-ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO $POSTGRES_USER;
-EOF\""
+ALTER SCHEMA public OWNER TO \"$POSTGRES_USER_ESCAPED\";
+GRANT USAGE ON SCHEMA public TO \"$POSTGRES_USER_ESCAPED\";
+GRANT CREATE ON SCHEMA public TO \"$POSTGRES_USER_ESCAPED\";
+GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO \"$POSTGRES_USER_ESCAPED\";
+GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO \"$POSTGRES_USER_ESCAPED\";
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO \"$POSTGRES_USER_ESCAPED\";
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO \"$POSTGRES_USER_ESCAPED\";
+EOF\"" 2>/tmp/pgsql_error.log
 
   if [ $? -ne 0 ]; then
-    msg_error "Échec de la configuration de PostgreSQL"
-    exit 1
+    msg_error "Échec de la configuration PostgreSQL. Consultez /tmp/pgsql_error.log pour plus de détails"
+    return 1
   fi
+
   msg_ok "PostgreSQL configuré avec succès"
+  return 0
 }
 
 function install_superset() {
