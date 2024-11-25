@@ -112,7 +112,6 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO "$POSTGRES_USER
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO "$POSTGRES_USER";
 EOF
 
-  
   cat <<EOF >"$SQL_SCRIPT_DB"
 GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO "$POSTGRES_USER";
 GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO "$POSTGRES_USER";
@@ -130,11 +129,11 @@ EOF
   fi
 
   # Nettoyage
-  pct exec "$CTID" -- rm -f /tmp/pgsql_script.sql /tmp/pgsql_script_db.sql
+  pct exec "$CTID" -- bash -c "rm -f /tmp/pgsql_script.sql"
+  pct exec "$CTID" -- bash -c "rm -f /tmp/pgsql_script_db.sql"
 
   msg_ok "PostgreSQL configuré avec succès"
 }
-
 
 function install_superset() {
   msg_info "Installation de Superset"
@@ -154,7 +153,7 @@ function install_superset() {
   fi
   msg_ok "Pilotes PostgreSQL installés avec succès"
 
-  pct exec "$CTID" -- bash -c "cat > /opt/superset-venv/superset_config.py << EOF
+  pct exec "$CTID" -- bash -c "cat > /opt/superset-venv/superset_config.py << 'EOF'
 import os
 SECRET_KEY = 'thisISaSECRET_1234'
 SQLALCHEMY_DATABASE_URI = 'postgresql+psycopg2://${POSTGRES_USER}:${POSTGRES_PASSWORD}@localhost:5432/${POSTGRES_DB}'
@@ -218,5 +217,6 @@ main
 motd_ssh_custom
 description
 
+IP=$(pct exec "$CTID" -- hostname -I | awk '{print $1}')
 msg_ok "Installation de Superset terminée avec succès!"
 echo -e "Accédez à Superset à l'adresse : http://${IP}:8088"
