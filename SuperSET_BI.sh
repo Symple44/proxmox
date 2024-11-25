@@ -153,9 +153,12 @@ function install_superset() {
   fi
   msg_ok "Pilotes PostgreSQL installés avec succès"
 
+  # Générer une clé sécurisée pour SECRET_KEY
+  SECRET_KEY=$(openssl rand -base64 42)
+
   pct exec "$CTID" -- bash -c "cat > /opt/superset-venv/superset_config.py << 'EOF'
 import os
-SECRET_KEY = 'thisISaSECRET_1234'
+SECRET_KEY = '${SECRET_KEY}'
 SQLALCHEMY_DATABASE_URI = 'postgresql+psycopg2://${POSTGRES_USER}:${POSTGRES_PASSWORD}@localhost:5432/${POSTGRES_DB}'
 SQLALCHEMY_TRACK_MODIFICATIONS = False
 EOF"
