@@ -100,7 +100,7 @@ function configure_postgresql() {
   # Échappement des variables
   POSTGRES_DB_ESCAPED=$(echo "$POSTGRES_DB" | sed 's/"/\\"/g')
   POSTGRES_USER_ESCAPED=$(echo "$POSTGRES_USER" | sed 's/"/\\"/g')
-  POSTGRES_PASSWORD_ESCAPED=$(echo "$POSTGRES_PASSWORD" | sed 's/'/'\\''/g')
+  POSTGRES_PASSWORD_ESCAPED=$(echo "$POSTGRES_PASSWORD" | sed "s/'/''/g")
 
   # Configuration de la base de données
   pct exec $CTID -- bash -c "su - postgres -c \"psql <<EOF
