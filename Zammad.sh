@@ -1,26 +1,29 @@
 #!/usr/bin/env bash
 source <(curl -s https://raw.githubusercontent.com/tteck/Proxmox/main/misc/build.func)
 
-set -e  # Arrêter le script en cas d'erreur
-
 function header_info {
   clear
   cat <<"EOF"
-   _____             __ 
-  / ___/____ ___  __/ /_
-  \__ \/ __ `__ \/ / __/
- ___/ / / / / / / / /_  
-/____/_/ /_/ /_/_/\__/  
+               __  
+  ___________  ______   ____  __ __  ______
+ / ___\_  __ \/  _ \ / ___\|  |  \/  ___/
+/ /_/  >  | \(  <_> ) /_/  >  |  /\___ \ 
+\___  /|__|   \____/\___  /|____//____  >
+/_____/             /_____/            \/ 
+
 EOF
 }
 
 header_info
 APP="Zammad"
-var_disk="30"    # Taille du disque (augmentée à 30 Go pour Zammad)
-var_cpu="2"      # Nombre de CPU
-var_ram="4096"   # RAM en Mo
+var_disk="30"
+var_cpu="4"
+var_ram="8192"
 var_os="debian"
-var_version="12" # Version de Debian
+var_version="12"
+POSTGRES_DB="zammad"
+POSTGRES_USER="zammad"
+POSTGRES_PASSWORD="Zammad2024!"
 variables
 color
 catch_errors
@@ -35,90 +38,119 @@ function default_settings() {
   RAM_SIZE="$var_ram"
   BRG="vmbr0"
   NET="dhcp"
+  GATE=""
+  APT_CACHER=""
+  APT_CACHER_IP=""
   DISABLEIP6="no"
+  MTU=""
+  SD=""
+  NS=""
+  MAC=""
+  VLAN=""
   SSH="yes"
+  VERB="no"
   echo_default
 }
 
-function install_dependencies() {
-  header_info
-  msg_info "Installing Zammad dependencies inside the container"
-
-  pct exec $CTID -- bash -c "apt update && apt upgrade -y"
-  pct exec $CTID -- bash -c "apt install -y \
-    apt-transport-https ca-certificates curl gnupg software-properties-common \
-    build-essential libssl-dev libffi-dev python3 python3-pip python3-dev \
-    libsasl2-dev libldap2-dev redis-server nodejs npm imagemagick \
-    graphicsmagick ghostscript libpq-dev libsqlite3-dev"
-  
-  msg_ok "Dependencies installed successfully"
+function configure_locales() {
+  msg_info "Configuration des paramètres régionaux"
+  pct exec "$CTID" -- bash -c "apt install -y locales"
+  pct exec "$CTID" -- bash -c "echo 'LANG=en_US.UTF-8' > /etc/default/locale"
+  pct exec "$CTID" -- bash -c "echo 'en_US.UTF-8 UTF-8' >> /etc/locale.gen"
+  pct exec "$CTID" -- bash -c "locale-gen en_US.UTF-8"
+  msg_ok "Paramètres régionaux configurés"
 }
 
-function setup_nodejs() {
-  msg_info "Setting up Node.js"
-  pct exec $CTID -- bash -c "curl -fsSL https://deb.nodesource.com/setup_20.x | bash -"
-  pct exec $CTID -- bash -c "apt install -y nodejs"
-  msg_ok "Node.js installed"
+function create_zammad_user() {
+  msg_info "Création de l'utilisateur Zammad"
+  pct exec "$CTID" -- bash -c "useradd zammad -m -d /opt/zammad -s /bin/bash"
+  pct exec "$CTID" -- bash -c "groupadd zammad"
+  msg_ok "Utilisateur Zammad créé"
 }
 
-function download_zammad() {
-  msg_info "Downloading Zammad source code"
-  pct exec $CTID -- bash -c "cd /opt && wget https://ftp.zammad.com/zammad-latest.tar.gz"
-  pct exec $CTID -- bash -c "mkdir -p /opt/zammad && tar -xzf /opt/zammad-latest.tar.gz -C /opt/zammad --strip-components 1"
-  pct exec $CTID -- bash -c "chown -R zammad:zammad /opt/zammad && rm -f /opt/zammad-latest.tar.gz"
-  msg_ok "Zammad source code downloaded and extracted"
+function install_postgresql() {
+  msg_info "Installation de PostgreSQL"
+  pct exec "$CTID" -- bash -c "apt update && apt install -y postgresql postgresql-contrib libpq-dev"
+  pct exec "$CTID" -- bash -c "systemctl enable postgresql --now"
+  pct exec "$CTID" -- bash -c "sudo -u postgres psql -c \"CREATE DATABASE $POSTGRES_DB;\""
+  pct exec "$CTID" -- bash -c "sudo -u postgres psql -c \"CREATE USER $POSTGRES_USER WITH PASSWORD '$POSTGRES_PASSWORD';\""
+  pct exec "$CTID" -- bash -c "sudo -u postgres psql -c \"GRANT ALL PRIVILEGES ON DATABASE $POSTGRES_DB TO $POSTGRES_USER;\""
+  msg_ok "PostgreSQL installé et configuré"
+}
+
+function install_nodejs() {
+  msg_info "Installation de Node.js"
+  pct exec "$CTID" -- bash -c "apt install -y ca-certificates curl gnupg"
+  pct exec "$CTID" -- bash -c "mkdir -p /etc/apt/keyrings"
+  pct exec "$CTID" -- bash -c "curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key | gpg --dearmor -o /etc/apt/keyrings/nodesource.gpg"
+  pct exec "$CTID" -- bash -c "echo 'deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_20.x nodistro main' > /etc/apt/sources.list.d/nodesource.list"
+  pct exec "$CTID" -- bash -c "apt update && apt install -y nodejs"
+  msg_ok "Node.js installé"
 }
 
 function install_rvm_ruby() {
-  msg_info "Installing RVM and Ruby"
-  pct exec $CTID -- bash -c "curl -sSL https://get.rvm.io | bash -s stable"
-  pct exec $CTID -- bash -c "source /usr/local/rvm/scripts/rvm && rvm install 3.2.3 && rvm use 3.2.3 --default"
-  msg_ok "RVM and Ruby installed"
+  msg_info "Installation de RVM et Ruby"
+  pct exec "$CTID" -- bash -c "apt install -y curl git patch build-essential bison zlib1g-dev libssl-dev \
+                               libxml2-dev libxslt1-dev libyaml-dev autoconf automake libreadline-dev \
+                               libtool libgmp-dev libffi-dev libgdbm-dev pkg-config libncurses5-dev gawk"
+  pct exec "$CTID" -- bash -c "gpg --keyserver keyserver.ubuntu.com --recv-keys \
+                               409B6B1796C275462A1703113804BB82D39DC0E3 7D2BAF1CF37B13E2069D6956105BD0E739499BDB"
+  pct exec "$CTID" -- bash -c "curl -sSL https://get.rvm.io | bash -s stable"
+  pct exec "$CTID" -- bash -c "usermod -a -G rvm zammad"
+  pct exec "$CTID" -- bash -c "source /usr/local/rvm/scripts/rvm && rvm install 3.2.3 && rvm use 3.2.3 --default"
+  pct exec "$CTID" -- bash -c "gem install bundler rake rails"
+  msg_ok "RVM et Ruby installés"
 }
 
-function configure_zammad() {
-  msg_info "Configuring Zammad"
-  pct exec $CTID -- bash -c "cd /opt/zammad && bundle config set --local without 'test development'"
-  pct exec $CTID -- bash -c "cd /opt/zammad && bundle install"
-  pct exec $CTID -- bash -c "cd /opt/zammad && RAILS_ENV=production rake db:migrate"
-  pct exec $CTID -- bash -c "cd /opt/zammad && RAILS_ENV=production rake assets:precompile"
-  msg_ok "Zammad configured"
+function install_zammad() {
+  msg_info "Téléchargement et installation de Zammad"
+  pct exec "$CTID" -- bash -c "cd /opt && wget https://ftp.zammad.com/zammad-latest.tar.gz"
+  pct exec "$CTID" -- bash -c "tar -xzf /opt/zammad-latest.tar.gz --strip-components=1 -C /opt/zammad"
+  pct exec "$CTID" -- bash -c "chown -R zammad:zammad /opt/zammad && rm -f /opt/zammad-latest.tar.gz"
+  pct exec "$CTID" -- bash -c "su - zammad -c 'cd /opt/zammad && bundle config set without \"test development mysql\" && bundle install'"
+  pct exec "$CTID" -- bash -c "su - zammad -c 'cd /opt/zammad && yarn install'"
+  msg_ok "Zammad installé"
 }
 
-function setup_postgresql() {
-  msg_info "Setting up PostgreSQL"
-  pct exec $CTID -- bash -c "apt install -y postgresql"
-  pct exec $CTID -- bash -c "sudo -u postgres createuser -s zammad"
-  pct exec $CTID -- bash -c "sudo -u postgres createdb -O zammad zammad"
-  msg_ok "PostgreSQL configured"
+function configure_elasticsearch() {
+  msg_info "Installation et configuration d'Elasticsearch"
+  pct exec "$CTID" -- bash -c "apt update && apt install -y apt-transport-https openjdk-11-jre-headless"
+  pct exec "$CTID" -- bash -c "wget -qO - https://artifacts.elastic.co/GPG-KEY-elasticsearch | apt-key add -"
+  pct exec "$CTID" -- bash -c "echo 'deb https://artifacts.elastic.co/packages/7.x/apt stable main' > /etc/apt/sources.list.d/elastic-7.x.list"
+  pct exec "$CTID" -- bash -c "apt update && apt install -y elasticsearch"
+  pct exec "$CTID" -- bash -c "systemctl enable elasticsearch --now"
+  pct exec "$CTID" -- bash -c "sed -i 's/#cluster.name: my-application/cluster.name: zammad/' /etc/elasticsearch/elasticsearch.yml"
+  pct exec "$CTID" -- bash -c "sed -i 's/#network.host: 192.168.0.1/network.host: 127.0.0.1/' /etc/elasticsearch/elasticsearch.yml"
+  pct exec "$CTID" -- bash -c "systemctl restart elasticsearch"
+  pct exec "$CTID" -- bash -c "su - zammad -c 'cd /opt/zammad && rails r \"Setting.set('es_url', 'http://localhost:9200')\"'"
+  pct exec "$CTID" -- bash -c "su - zammad -c 'cd /opt/zammad && rake searchindex:rebuild'"
+  msg_ok "Elasticsearch installé et configuré"
 }
 
-function configure_webserver() {
-  msg_info "Configuring web server"
-  pct exec $CTID -- bash -c "apt install -y apache2"
-  # Ajoutez ici une configuration pour Apache si nécessaire
-  msg_ok "Web server configured"
+function install_systemd_service() {
+  msg_info "Installation des services systemd pour Zammad"
+  pct exec "$CTID" -- bash -c "cd /opt/zammad/script/systemd && ./install-zammad-systemd-services.sh"
+  pct exec "$CTID" -- bash -c "systemctl enable zammad --now"
+  msg_ok "Services systemd de Zammad installés et démarrés"
 }
 
-function setup_motd() {
-  msg_info "Customizing MOTD"
-  pct exec $CTID -- bash -c "echo 'Welcome to your Zammad LXC container!' > /etc/motd"
-  msg_ok "MOTD customized"
+function main() {
+  configure_locales
+  create_zammad_user
+  install_postgresql
+  install_nodejs
+  install_rvm_ruby
+  install_zammad
+  configure_elasticsearch
+  install_systemd_service
 }
 
 header_info
 start
 build_container
-default_settings
-install_dependencies
-setup_nodejs
-download_zammad
-install_rvm_ruby
-configure_zammad
-setup_postgresql
-configure_webserver
-setup_motd
+main
+description
 
-msg_ok "Installation Completed Successfully!"
-echo -e "${APP} should be reachable by going to the following URL:\n"
-echo -e "  http://${IP}/zammad"
+IP=$(pct exec "$CTID" -- hostname -I | awk '{print $1}')
+msg_ok "Installation de Zammad terminée avec Elasticsearch!"
+echo -e "Accédez à Zammad à l'adresse : http://${IP}:3000"
