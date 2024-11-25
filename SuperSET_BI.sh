@@ -121,7 +121,7 @@ EOF
   pct push "$CTID" "$SQL_SCRIPT" "/tmp/pgsql_script.sql"
   pct push "$CTID" "$SQL_SCRIPT_DB" "/tmp/pgsql_script_db.sql"
 
-  # Vérification des fichiers
+  # Vérification des fichiers avant exécution
   pct exec "$CTID" -- bash -c "[ -f /tmp/pgsql_script.sql ] || { echo 'Fichier /tmp/pgsql_script.sql introuvable'; exit 1; }"
   pct exec "$CTID" -- bash -c "[ -f /tmp/pgsql_script_db.sql ] || { echo 'Fichier /tmp/pgsql_script_db.sql introuvable'; exit 1; }"
 
@@ -134,9 +134,9 @@ EOF
     exit 1
   fi
 
-  # Nettoyage avec vérification préalable
-  pct exec "$CTID" -- bash -c "[ -f /tmp/pgsql_script.sql ] && rm -f /tmp/pgsql_script.sql"
-  pct exec "$CTID" -- bash -c "[ -f /tmp/pgsql_script_db.sql ] && rm -f /tmp/pgsql_script_db.sql"
+  # Nettoyage des fichiers avec des vérifications
+  pct exec "$CTID" -- bash -c "if [ -f /tmp/pgsql_script.sql ]; then rm -f /tmp/pgsql_script.sql; else echo '/tmp/pgsql_script.sql non trouvé'; fi"
+  pct exec "$CTID" -- bash -c "if [ -f /tmp/pgsql_script_db.sql ]; then rm -f /tmp/pgsql_script_db.sql; else echo '/tmp/pgsql_script_db.sql non trouvé'; fi"
 
   msg_ok "PostgreSQL configuré avec succès"
 }
