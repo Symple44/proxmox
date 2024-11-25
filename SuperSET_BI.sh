@@ -86,9 +86,10 @@ function configure_postgresql() {
   msg_info "Configuration de PostgreSQL"
 
   # Configurer la base de données PostgreSQL
-  pct exec $CTID -- bash -c "su - postgres -c \"psql -c 'CREATE DATABASE $POSTGRES_DB;'\""
-  pct exec $CTID -- bash -c "su - postgres -c \"psql -c 'CREATE USER $POSTGRES_USER WITH PASSWORD \'$POSTGRES_PASSWORD\';'\""
-  pct exec $CTID -- bash -c "su - postgres -c \"psql -c 'GRANT ALL PRIVILEGES ON DATABASE $POSTGRES_DB TO $POSTGRES_USER;'\""
+  pct exec $CTID -- bash -c "su - postgres -c \"psql -c \\\"CREATE DATABASE $POSTGRES_DB;\\\"\""
+  pct exec $CTID -- bash -c "su - postgres -c \"psql -c \\\"CREATE USER $POSTGRES_USER WITH PASSWORD '$POSTGRES_PASSWORD';\\\"\""
+  pct exec $CTID -- bash -c "su - postgres -c \"psql -c \\\"GRANT ALL PRIVILEGES ON DATABASE $POSTGRES_DB TO $POSTGRES_USER;\\\"\""
+
 
   if [ $? -ne 0 ]; then
     msg_error "Échec de la configuration de PostgreSQL"
