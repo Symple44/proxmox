@@ -22,6 +22,9 @@ var_ram="4096"
 var_os="debian"
 var_version="12"
 ADMIN_PASSWORD="Superset2024!" # Mot de passe administrateur
+POSTGRES_DB="superset"
+POSTGRES_USER="superset_user"
+POSTGRES_PASSWORD="Postgres2024!"
 variables
 color
 catch_errors
@@ -71,12 +74,27 @@ function install_dependencies() {
   pct exec $CTID -- bash -c "apt-get update --fix-missing && apt-get upgrade -y"
   pct exec $CTID -- bash -c "apt-get install -y build-essential libssl-dev libffi-dev python3 python3-pip python3-dev \
     libsasl2-dev libldap2-dev python3.11-venv redis-server libpq-dev mariadb-client libmariadb-dev libmariadb-dev-compat \
-    freetds-dev unixodbc-dev curl locales"
+    freetds-dev unixodbc-dev default-libmysqlclient-dev curl locales postgresql"
   if [ $? -ne 0 ]; then
     msg_error "Échec de l'installation des dépendances"
     exit 1
   fi
   msg_ok "Dépendances système installées avec succès"
+}
+
+function configure_postgresql() {
+  msg_info "Configuration de PostgreSQL"
+
+  # Configurer la base de données PostgreSQL
+  pct exec $CTID -- bash -c "sudo -u postgres psql -c \"CREATE DATABASE $POSTGRES_DB;\""
+  pct exec $CTID -- bash -c "sudo -u postgres psql -c \"CREATE USER $POSTGRES_USER WITH PASSWORD '$POSTGRES_PASSWORD';\""
+  pct exec $CTID -- bash -c "sudo -u postgres psql -c \"GRANT ALL PRIVILEGES ON DATABASE $POSTGRES_DB TO $POSTGRES_USER;\""
+
+  if [ $? -ne 0 ]; then
+    msg_error "Échec de la configuration de PostgreSQL"
+    exit 1
+  fi
+  msg_ok "PostgreSQL configuré avec succès"
 }
 
 function install_superset() {
@@ -91,13 +109,21 @@ function install_superset() {
   fi
   msg_ok "Superset installé avec succès"
 
-  # Création du fichier de configuration personnalisé
+  # Installation des pilotes pour PostgreSQL
+  pct exec $CTID -- bash -c "source /opt/superset-venv/bin/activate && pip install psycopg2-binary"
+  if [ $? -ne 0 ]; then
+    msg_error "Échec de l'installation des pilotes PostgreSQL"
+    exit 1
+  fi
+  msg_ok "Pilotes PostgreSQL installés avec succès"
+
+  # Configuration de Superset pour utiliser PostgreSQL
   pct exec $CTID -- bash -c "cat > /opt/superset-venv/superset_config.py << EOF
 import os
 from datetime import timedelta
 
 SECRET_KEY = 'thisISaSECRET_1234'
-SQLALCHEMY_DATABASE_URI = 'sqlite:////opt/superset-venv/superset.db'
+SQLALCHEMY_DATABASE_URI = 'postgresql+psycopg2://${POSTGRES_USER}:${POSTGRES_PASSWORD}@localhost:5432/${POSTGRES_DB}'
 SQLALCHEMY_TRACK_MODIFICATIONS = False
 CACHE_CONFIG = {
     'CACHE_TYPE': 'SimpleCache',
@@ -105,8 +131,7 @@ CACHE_CONFIG = {
 }
 EOF"
 
-  # Initialisation de Superset avec FLASK_APP défini
-  msg_info "Initialisation de Superset"
+  # Initialisation de Superset avec PostgreSQL
   pct exec $CTID -- bash -c "source /opt/superset-venv/bin/activate && export FLASK_APP=superset && export SUPERSET_CONFIG_PATH=/opt/superset-venv/superset_config.py && superset db upgrade"
   if [ $? -ne 0 ]; then
     msg_error "Échec de la mise à jour de la base de données Superset"
@@ -128,49 +153,17 @@ EOF"
   msg_ok "Superset initialisé avec succès"
 }
 
-function configure_firewall() {
-  msg_info "Configuration du pare-feu et autorisation du port 8088"
-  pct exec $CTID -- bash -c "apt install -y ufw && ufw allow 8088 && ufw --force enable"
-  if [ $? -ne 0 ]; then
-    msg_error "Échec de la configuration du pare-feu"
-    exit 1
-  fi
-  msg_ok "Pare-feu configuré avec succès"
-}
-
-function motd_ssh_custom() {
-  msg_info "Customizing MOTD and SSH access"
-  # Customize MOTD with Superset specific message
-  pct exec $CTID -- bash -c "echo 'Welcome to your Superset LXC container!' > /etc/motd"
-  
-  # Set up auto-login for root on tty1
-  pct exec $CTID -- mkdir -p /etc/systemd/system/container-getty@1.service.d
-  pct exec $CTID -- bash -c "cat <<EOF >/etc/systemd/system/container-getty@1.service.d/override.conf
-[Service]
-ExecStart=
-ExecStart=-/sbin/agetty --autologin root --noclear --keep-baud tty%I 115200,38400,9600 \\$TERM
-EOF"
-
-  # Reload systemd and restart getty service to apply auto-login
-  pct exec $CTID -- systemctl daemon-reload
-  pct exec $CTID -- systemctl restart container-getty@1.service
-  msg_ok "MOTD and SSH access customized"
-}
-
-
 function main() {
+  default_settings
+  start
+  build_container
   install_dependencies
   configure_locales
+  configure_postgresql
   install_superset
-  configure_firewall
 }
 
 header_info
-start
-build_container
 main
-motd_ssh_custom
-description
-
 msg_ok "Installation de Superset terminée avec succès!"
 echo -e "Accédez à Superset à l'adresse : ${BL}http://${IP}:8088${CL}"
