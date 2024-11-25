@@ -152,12 +152,12 @@ function install_superset() {
   fi
   msg_ok "Superset installé avec succès"
 
-  pct exec "$CTID" -- bash -c "source /opt/superset-venv/bin/activate && pip install psycopg2-binary"
+  pct exec "$CTID" -- bash -c "source /opt/superset-venv/bin/activate && pip install psycopg2-binary pillow"
   if [ $? -ne 0 ]; then
-    msg_error "Échec de l'installation des pilotes PostgreSQL"
+    msg_error "Échec de l'installation des dépendances Python"
     exit 1
   fi
-  msg_ok "Pilotes PostgreSQL installés avec succès"
+  msg_ok "Dépendances Python installées avec succès"
 
   # Générer une clé sécurisée
   SECRET_KEY=$(openssl rand -base64 42)
@@ -171,31 +171,37 @@ SQLALCHEMY_DATABASE_URI = 'postgresql+psycopg2://${POSTGRES_USER}:${POSTGRES_PAS
 SQLALCHEMY_TRACK_MODIFICATIONS = False
 EOF"
 
-  # Ajouter SUPERSET_CONFIG_PATH à l'environnement virtuel
+  # Ajouter FLASK_APP et SUPERSET_CONFIG_PATH à l'environnement virtuel
+  pct exec "$CTID" -- bash -c "echo 'export FLASK_APP=superset' >> /opt/superset-venv/bin/activate"
   pct exec "$CTID" -- bash -c "echo 'export SUPERSET_CONFIG_PATH=/opt/superset-venv/superset_config.py' >> /opt/superset-venv/bin/activate"
 
+  # Configurer les paramètres régionaux
+  pct exec "$CTID" -- bash -c "export LANG=en_US.UTF-8"
+  pct exec "$CTID" -- bash -c "export LC_ALL=en_US.UTF-8"
+
   # Effectuer les migrations de base de données
-  pct exec "$CTID" -- bash -c "source /opt/superset-venv/bin/activate && export FLASK_APP=superset && export SUPERSET_CONFIG_PATH=/opt/superset-venv/superset_config.py && superset db upgrade"
+  pct exec "$CTID" -- bash -c "source /opt/superset-venv/bin/activate && export FLASK_APP=superset && superset db upgrade"
   if [ $? -ne 0 ]; then
     msg_error "Échec de la mise à jour de la base de données Superset"
     exit 1
   fi
 
   # Créer un utilisateur administrateur
-  pct exec "$CTID" -- bash -c "source /opt/superset-venv/bin/activate && export FLASK_APP=superset && export SUPERSET_CONFIG_PATH=/opt/superset-venv/superset_config.py && superset fab create-admin --username admin --password $ADMIN_PASSWORD"
+  pct exec "$CTID" -- bash -c "source /opt/superset-venv/bin/activate && export FLASK_APP=superset && superset fab create-admin --username admin --password $ADMIN_PASSWORD --firstname Superset --lastname Admin --email admin@example.com"
   if [ $? -ne 0 ]; then
     msg_error "Échec de la création de l'utilisateur administrateur Superset"
     exit 1
   fi
 
   # Initialiser Superset
-  pct exec "$CTID" -- bash -c "source /opt/superset-venv/bin/activate && export FLASK_APP=superset && export SUPERSET_CONFIG_PATH=/opt/superset-venv/superset_config.py && superset init"
+  pct exec "$CTID" -- bash -c "source /opt/superset-venv/bin/activate && export FLASK_APP=superset && superset init"
   if [ $? -ne 0 ]; then
     msg_error "Échec de l'initialisation de Superset"
     exit 1
   fi
   msg_ok "Superset initialisé avec succès"
 }
+
 
 
 
