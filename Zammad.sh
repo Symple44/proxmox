@@ -63,10 +63,16 @@ function configure_locales() {
 
 function create_zammad_user() {
   msg_info "Création de l'utilisateur Zammad"
-  pct exec "$CTID" -- bash -c "useradd zammad -m -d /opt/zammad -s /bin/bash"
-  pct exec "$CTID" -- bash -c "groupadd zammad"
-  msg_ok "Utilisateur Zammad créé"
+
+  # Vérifier si le groupe 'zammad' existe déjà
+  pct exec "$CTID" -- bash -c "getent group zammad || groupadd zammad"
+
+  # Vérifier si l'utilisateur 'zammad' existe déjà
+  pct exec "$CTID" -- bash -c "id -u zammad &>/dev/null || useradd zammad -m -d /opt/zammad -s /bin/bash"
+
+  msg_ok "Utilisateur Zammad créé ou déjà existant"
 }
+
 
 function install_postgresql() {
   msg_info "Installation de PostgreSQL"
