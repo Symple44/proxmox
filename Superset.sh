@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 # Mode strict pour arrêt en cas d'erreur
-
+sdfsdfsdf
 
 # Fonction pour générer un mot de passe aléatoire
 generate_password() {
