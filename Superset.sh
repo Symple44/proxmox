@@ -40,6 +40,7 @@ CPU_CORES="4"
 RAM_SIZE="4096" # Mo
 
 # Configurations Superset
+msg_info "Mot de passe généré : $(generate_password)"
 ADMIN_USER="admin"
 if [ -z "${ADMIN_PASSWORD:-}" ]; then
     ADMIN_PASSWORD=$(generate_password)
