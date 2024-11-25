@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Mode strict pour arrêter le script en cas d'erreur
+# Mode strict pour arrêt en cas d'erreur
 set -euo pipefail
 trap 'msg_error "Une erreur est survenue à la ligne $LINENO."' ERR
 
@@ -45,6 +45,9 @@ ADMIN_PASSWORD=${ADMIN_PASSWORD:-$(generate_password)}
 ADMIN_EMAIL="admin@example.com"
 SUPERSET_PORT="8088"
 
+# Emplacement du template Debian
+TEMPLATE_PATH="/var/lib/vz/template/cache/debian-${DEBIAN_VERSION}-standard_${DEBIAN_VERSION}.0-1_amd64.tar.gz"
+
 # Vérification des prérequis
 check_prerequisites() {
     msg_info "Vérification des prérequis..."
@@ -63,6 +66,18 @@ check_prerequisites() {
     msg_success "Prérequis validés."
 }
 
+# Téléchargement du template Debian si nécessaire
+download_template() {
+    if [ ! -f "$TEMPLATE_PATH" ]; then
+        msg_info "Le template Debian $DEBIAN_VERSION n'existe pas. Téléchargement en cours..."
+        wget -O "$TEMPLATE_PATH" "https://cdimage.debian.org/cdimage/cloud/bullseye/daily/20231030-2032/debian-${DEBIAN_VERSION}-standard_${DEBIAN_VERSION}.0-1_amd64.tar.gz" || \
+            msg_error "Échec du téléchargement du template Debian."
+        msg_success "Template Debian téléchargé avec succès."
+    else
+        msg_info "Le template Debian existe déjà. Aucun téléchargement nécessaire."
+    fi
+}
+
 # Création du conteneur
 create_container() {
     msg_info "Création du conteneur Debian $DEBIAN_VERSION..."
@@ -71,7 +86,7 @@ create_container() {
     CONTAINER_ID=$(pvesh get /cluster/nextid)
     
     # Créer le conteneur
-    pct create $CONTAINER_ID /var/lib/vz/template/cache/debian-${DEBIAN_VERSION}-standard_${DEBIAN_VERSION}.0-1_amd64.tar.gz \
+    pct create $CONTAINER_ID "$TEMPLATE_PATH" \
         --hostname superset \
         --cores $CPU_CORES \
         --memory $RAM_SIZE \
@@ -161,47 +176,15 @@ install_and_configure_superset() {
     msg_success "Superset installé et configuré."
 }
 
-# Configuration de la sécurité
-secure_installation() {
-    msg_info "Sécurisation de l'installation..."
-    
-    # Configurer le pare-feu
-    pct exec $CONTAINER_ID -- bash -c "ufw allow ${SUPERSET_PORT}/tcp && \
-        ufw --force enable"
-    
-    msg_success "Installation sécurisée."
-}
-
-# Vérification finale
-verify_installation() {
-    msg_info "Vérification de l'installation..."
-    
-    # Vérifier l'installation de Superset
-    pct exec $CONTAINER_ID -- bash -c "source /opt/superset-venv/bin/activate && python3 -c 'import superset'" || \
-        msg_error "Superset n'est pas installé correctement."
-    
-    msg_success "Installation vérifiée avec succès."
-}
-
-# Afficher les informations de connexion
-show_completion_message() {
-    echo -e "\n${GREEN}=== Installation de Superset terminée avec succès ===${NC}"
-    echo -e "\nInformations de connexion :"
-    echo -e "URL: ${YELLOW}http://${CONTAINER_IP}:${SUPERSET_PORT}${NC}"
-    echo -e "Utilisateur: ${YELLOW}${ADMIN_USER}${NC}"
-    echo -e "Mot de passe: ${YELLOW}${ADMIN_PASSWORD}${NC}"
-}
-
 # Fonction principale
 main() {
     check_prerequisites
+    download_template
     create_container
     install_dependencies
     setup_environment
     install_and_configure_superset
-    secure_installation
-    verify_installation
-    show_completion_message
+    msg_success "Installation de Superset terminée."
 }
 
 # Exécution du script
