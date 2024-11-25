@@ -41,9 +41,14 @@ RAM_SIZE="4096" # Mo
 
 # Configurations Superset
 ADMIN_USER="admin"
-ADMIN_PASSWORD=${ADMIN_PASSWORD:-$(generate_password)}
+if [ -z "${ADMIN_PASSWORD:-}" ]; then
+    ADMIN_PASSWORD=$(generate_password)
+fi
 ADMIN_EMAIL="admin@example.com"
 SUPERSET_PORT="8088"
+
+msg_info "Mot de passe généré : $(generate_password)"
+
 
 # Emplacement du template Debian
 TEMPLATE_PATH="/var/lib/vz/template/cache/debian-${DEBIAN_VERSION}-standard_${DEBIAN_VERSION}.0-1_amd64.tar.gz"
