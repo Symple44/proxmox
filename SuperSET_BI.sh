@@ -91,18 +91,43 @@ function install_superset() {
   fi
   msg_ok "Superset installé avec succès"
 
+  # Création du fichier de configuration personnalisé
+  pct exec $CTID -- bash -c "cat > /opt/superset-venv/superset_config.py << EOF
+import os
+from datetime import timedelta
+
+SECRET_KEY = 'thisISaSECRET_1234'
+SQLALCHEMY_DATABASE_URI = 'sqlite:////opt/superset-venv/superset.db'
+SQLALCHEMY_TRACK_MODIFICATIONS = False
+CACHE_CONFIG = {
+    'CACHE_TYPE': 'SimpleCache',
+    'CACHE_DEFAULT_TIMEOUT': 300
+}
+EOF"
+
   # Initialisation de Superset
   msg_info "Initialisation de Superset"
-  pct exec $CTID -- bash -c "source /opt/superset-venv/bin/activate && superset db upgrade"
-  pct exec $CTID -- bash -c "source /opt/superset-venv/bin/activate && superset fab create-admin \
+  pct exec $CTID -- bash -c "source /opt/superset-venv/bin/activate && export SUPERSET_CONFIG_PATH=/opt/superset-venv/superset_config.py && superset db upgrade"
+  if [ $? -ne 0 ]; then
+    msg_error "Échec de la mise à jour de la base de données Superset"
+    exit 1
+  fi
+
+  pct exec $CTID -- bash -c "source /opt/superset-venv/bin/activate && export SUPERSET_CONFIG_PATH=/opt/superset-venv/superset_config.py && superset fab create-admin \
     --username admin --firstname Admin --lastname User --email admin@example.com --password $ADMIN_PASSWORD"
-  pct exec $CTID -- bash -c "source /opt/superset-venv/bin/activate && superset init"
+  if [ $? -ne 0 ]; then
+    msg_error "Échec de la création de l'utilisateur administrateur Superset"
+    exit 1
+  fi
+
+  pct exec $CTID -- bash -c "source /opt/superset-venv/bin/activate && export SUPERSET_CONFIG_PATH=/opt/superset-venv/superset_config.py && superset init"
   if [ $? -ne 0 ]; then
     msg_error "Échec de l'initialisation de Superset"
     exit 1
   fi
   msg_ok "Superset initialisé avec succès"
 }
+
 
 function configure_firewall() {
   msg_info "Configuration du pare-feu et autorisation du port 8088"
