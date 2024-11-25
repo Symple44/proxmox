@@ -56,12 +56,12 @@ TEMPLATE_PATH="/var/lib/vz/template/cache/debian-${DEBIAN_VERSION}-standard_${DE
 check_prerequisites() {
     msg_info "Vérification des prérequis..."
     
-    # Vérifier si Proxmox est installé
-    if [ ! -f "/usr/bin/pct" ]; then
-        msg_error "Proxmox VE n'est pas installé."
+    # Vérification de Proxmox VE
+    if ! command -v pct &> /dev/null; then
+        msg_error "Proxmox VE n'est pas installé ou la commande 'pct' n'est pas disponible."
     fi
     
-    # Vérifier l'espace disque disponible
+    # Vérification de l'espace disque
     FREE_SPACE=$(df -BG /var/lib/vz | awk 'NR==2 {print $4}' | sed 's/G//')
     if [ "$FREE_SPACE" -lt "$DISK_SIZE" ]; then
         msg_error "Espace disque insuffisant. Requis: ${DISK_SIZE}G, Disponible: ${FREE_SPACE}G."
@@ -69,6 +69,7 @@ check_prerequisites() {
     
     msg_success "Prérequis validés."
 }
+
 
 # Téléchargement du template Debian si nécessaire
 download_template() {
