@@ -90,6 +90,10 @@ function configure_postgresql() {
   pct exec $CTID -- bash -c "su - postgres -c \"psql -c \\\"CREATE USER $POSTGRES_USER WITH PASSWORD '$POSTGRES_PASSWORD';\\\"\""
   pct exec $CTID -- bash -c "su - postgres -c \"psql -c \\\"GRANT ALL PRIVILEGES ON DATABASE $POSTGRES_DB TO $POSTGRES_USER;\\\"\""
 
+  # Ajouter les privilèges sur le schéma public
+  pct exec $CTID -- bash -c "su - postgres -c \"psql -c \\\"GRANT USAGE ON SCHEMA public TO $POSTGRES_USER;\\\"\""
+  pct exec $CTID -- bash -c "su - postgres -c \"psql -c \\\"GRANT CREATE ON SCHEMA public TO $POSTGRES_USER;\\\"\""
+  pct exec $CTID -- bash -c "su - postgres -c \"psql -c \\\"ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO $POSTGRES_USER;\\\"\""
 
   if [ $? -ne 0 ]; then
     msg_error "Échec de la configuration de PostgreSQL"
@@ -97,6 +101,7 @@ function configure_postgresql() {
   fi
   msg_ok "PostgreSQL configuré avec succès"
 }
+
 
 function install_superset() {
   msg_info "Installation de Superset"
