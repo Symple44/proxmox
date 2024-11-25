@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 set -euo pipefail
-trap 'msg_error "Une erreur est survenue à la ligne $LINENO."' ERR
+trap 'msg_error "Une erreur est survenue ààà la ligne $LINENO."' ERR
 
 # Fonction pour générer un mot de passe aléatoire
 generate_password() {
