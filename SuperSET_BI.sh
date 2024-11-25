@@ -86,14 +86,18 @@ function configure_postgresql() {
   msg_info "Configuration de PostgreSQL"
 
   # Configurer la base de données PostgreSQL
-  pct exec $CTID -- bash -c "su - postgres -c \"psql -c \\\"CREATE DATABASE $POSTGRES_DB;\\\"\""
-  pct exec $CTID -- bash -c "su - postgres -c \"psql -c \\\"CREATE USER $POSTGRES_USER WITH PASSWORD '$POSTGRES_PASSWORD';\\\"\""
-  pct exec $CTID -- bash -c "su - postgres -c \"psql -c \\\"GRANT ALL PRIVILEGES ON DATABASE $POSTGRES_DB TO $POSTGRES_USER;\\\"\""
+  pct exec $CTID -- bash -c "su - postgres -c \"psql <<EOF
+CREATE DATABASE $POSTGRES_DB;
+CREATE USER $POSTGRES_USER WITH PASSWORD '$POSTGRES_PASSWORD';
+GRANT ALL PRIVILEGES ON DATABASE $POSTGRES_DB TO $POSTGRES_USER;
 
-  # Ajouter les privilèges sur le schéma public
-  pct exec $CTID -- bash -c "su - postgres -c \"psql -c \\\"GRANT USAGE ON SCHEMA public TO $POSTGRES_USER;\\\"\""
-  pct exec $CTID -- bash -c "su - postgres -c \"psql -c \\\"GRANT CREATE ON SCHEMA public TO $POSTGRES_USER;\\\"\""
-  pct exec $CTID -- bash -c "su - postgres -c \"psql -c \\\"ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO $POSTGRES_USER;\\\"\""
+-- Permissions sur le schéma public
+ALTER SCHEMA public OWNER TO $POSTGRES_USER;
+GRANT ALL ON SCHEMA public TO $POSTGRES_USER;
+GRANT USAGE, CREATE ON SCHEMA public TO $POSTGRES_USER;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO $POSTGRES_USER;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO $POSTGRES_USER;
+EOF\""
 
   if [ $? -ne 0 ]; then
     msg_error "Échec de la configuration de PostgreSQL"
@@ -101,7 +105,6 @@ function configure_postgresql() {
   fi
   msg_ok "PostgreSQL configuré avec succès"
 }
-
 
 function install_superset() {
   msg_info "Installation de Superset"
