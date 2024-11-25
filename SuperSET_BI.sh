@@ -162,13 +162,21 @@ function install_superset() {
   # Générer une clé sécurisée
   SECRET_KEY=$(openssl rand -base64 42)
 
-  # Créer le fichier superset_config.py
+  # Créer le fichier superset_config.py avec la langue française
   pct exec "$CTID" -- bash -c "cat > /opt/superset-venv/superset_config.py <<EOF
 import os
 
 SECRET_KEY = '${SECRET_KEY}'
 SQLALCHEMY_DATABASE_URI = 'postgresql+psycopg2://${POSTGRES_USER}:${POSTGRES_PASSWORD}@localhost:5432/${POSTGRES_DB}'
 SQLALCHEMY_TRACK_MODIFICATIONS = False
+
+# Configuration pour la langue française
+BABEL_DEFAULT_LOCALE = 'fr'
+BABEL_DEFAULT_FOLDER = 'translations'
+LANGUAGES = {
+    'fr': {'flag': 'fr', 'name': 'French'},
+    'en': {'flag': 'us', 'name': 'English'}
+}
 EOF"
 
   # Ajouter FLASK_APP et SUPERSET_CONFIG_PATH à l'environnement virtuel
@@ -176,8 +184,8 @@ EOF"
   pct exec "$CTID" -- bash -c "echo 'export SUPERSET_CONFIG_PATH=/opt/superset-venv/superset_config.py' >> /opt/superset-venv/bin/activate"
 
   # Configurer les paramètres régionaux
-  pct exec "$CTID" -- bash -c "export LANG=en_US.UTF-8"
-  pct exec "$CTID" -- bash -c "export LC_ALL=en_US.UTF-8"
+  pct exec "$CTID" -- bash -c "export LANG=fr_FR.UTF-8"
+  pct exec "$CTID" -- bash -c "export LC_ALL=fr_FR.UTF-8"
 
   # Effectuer les migrations de base de données
   pct exec "$CTID" -- bash -c "source /opt/superset-venv/bin/activate && export FLASK_APP=superset && superset db upgrade"
@@ -202,6 +210,7 @@ EOF"
   msg_ok "Superset initialisé avec succès"
 }
 
+
 function configure_firewall() {
   msg_info "Configuration du pare-feu et autorisation du port 8088"
   pct exec "$CTID" -- bash -c "if ! command -v ufw >/dev/null; then apt install -y ufw; fi"
@@ -212,6 +221,45 @@ function configure_firewall() {
   fi
   msg_ok "Pare-feu configuré avec succès"
 }
+
+function configure_superset_service() {
+  msg_info "Création d'un service systemd pour Superset"
+
+  # Créez un fichier de service systemd pour Superset
+  pct exec "$CTID" -- bash -c "cat <<EOF >/etc/systemd/system/superset.service
+[Unit]
+Description=Apache Superset
+After=network.target
+
+[Service]
+User=root
+Group=root
+WorkingDirectory=/opt/superset-venv
+Environment='FLASK_APP=superset'
+Environment='SUPERSET_CONFIG_PATH=/opt/superset-venv/superset_config.py'
+ExecStart=/opt/superset-venv/bin/superset run -h 0.0.0.0 -p 8088
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+EOF"
+
+  # Recharge systemd pour prendre en compte le nouveau service
+  pct exec "$CTID" -- systemctl daemon-reload
+
+  # Activer et démarrer le service Superset
+  pct exec "$CTID" -- systemctl enable superset
+  pct exec "$CTID" -- systemctl start superset
+
+  # Vérifiez si le service a démarré correctement
+  if pct exec "$CTID" -- systemctl is-active superset >/dev/null; then
+    msg_ok "Service Superset configuré et démarré avec succès"
+  else
+    msg_error "Le service Superset n'a pas pu être démarré"
+    exit 1
+  fi
+}
+
 
 function motd_ssh_custom() {
   msg_info "Customizing MOTD and SSH access"
@@ -238,6 +286,7 @@ function main() {
   configure_postgresql
   install_superset
   configure_firewall
+  configure_superset_service
 }
 
 header_info
