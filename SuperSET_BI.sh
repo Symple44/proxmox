@@ -24,7 +24,7 @@ var_version="12"
 ADMIN_PASSWORD="Superset2024!" # Mot de passe administrateur
 POSTGRES_DB="superset"
 POSTGRES_USER="superset_user"
-POSTGRES_PASSWORD="Postgres2024!"
+POSTGRES_PASSWORD="Postgres2024"
 variables
 color
 catch_errors
@@ -100,22 +100,35 @@ function configure_postgresql() {
   # Échappement des variables
   POSTGRES_DB_ESCAPED=$(echo "$POSTGRES_DB" | sed 's/"/\\"/g')
   POSTGRES_USER_ESCAPED=$(echo "$POSTGRES_USER" | sed 's/"/\\"/g')
-  POSTGRES_PASSWORD_ESCAPED=$(echo "$POSTGRES_PASSWORD" | sed "s/'/''/g")
+  POSTGRES_PASSWORD_ESCAPED=$(echo "$POSTGRES_PASSWORD" | sed "s/'/'\\''/g")
 
-  # Configuration de la base de données
-  pct exec $CTID -- bash -c "su - postgres -c \"psql <<EOF
+  # Configuration de la base de données avec des permissions étendues
+  pct exec $CTID -- bash -c "su - postgres -c \"psql < <EOF
+-- Créer la base de données et l'utilisateur
 CREATE DATABASE \"$POSTGRES_DB_ESCAPED\";
 CREATE USER \"$POSTGRES_USER_ESCAPED\" WITH PASSWORD '$POSTGRES_PASSWORD_ESCAPED';
+
+-- Donner tous les privilèges sur la base de données
 GRANT ALL PRIVILEGES ON DATABASE \"$POSTGRES_DB_ESCAPED\" TO \"$POSTGRES_USER_ESCAPED\";
 
--- Permissions sur le schéma public
+-- Configuration complète des privilèges sur le schéma public
+ALTER DATABASE \"$POSTGRES_DB_ESCAPED\" OWNER TO \"$POSTGRES_USER_ESCAPED\";
 ALTER SCHEMA public OWNER TO \"$POSTGRES_USER_ESCAPED\";
-GRANT USAGE ON SCHEMA public TO \"$POSTGRES_USER_ESCAPED\";
+GRANT ALL PRIVILEGES ON SCHEMA public TO \"$POSTGRES_USER_ESCAPED\";
 GRANT CREATE ON SCHEMA public TO \"$POSTGRES_USER_ESCAPED\";
-GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO \"$POSTGRES_USER_ESCAPED\";
-GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO \"$POSTGRES_USER_ESCAPED\";
+
+-- Donner des privilèges sur toutes les tables futures
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO \"$POSTGRES_USER_ESCAPED\";
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO \"$POSTGRES_USER_ESCAPED\";
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON FUNCTIONS TO \"$POSTGRES_USER_ESCAPED\";
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TYPES TO \"$POSTGRES_USER_ESCAPED\";
+
+-- Se connecter à la base de données et donner des privilèges supplémentaires
+\\c \"$POSTGRES_DB_ESCAPED\"
+GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO \"$POSTGRES_USER_ESCAPED\";
+GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO \"$POSTGRES_USER_ESCAPED\";
+GRANT ALL PRIVILEGES ON ALL FUNCTIONS IN SCHEMA public TO \"$POSTGRES_USER_ESCAPED\";
+
 EOF\"" 2>/tmp/pgsql_error.log
 
   if [ $? -ne 0 ]; then
