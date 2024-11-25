@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Mode strict pour arrêt en cas d'erreur
+# Mode strict pour arrêter le script en cas d'erreur
 set -euo pipefail
 trap 'msg_error "Une erreur est survenue à la ligne $LINENO."' ERR
 
@@ -8,22 +8,6 @@ trap 'msg_error "Une erreur est survenue à la ligne $LINENO."' ERR
 generate_password() {
     tr -dc 'A-Za-z0-9!@#$%^&*()_+-=' </dev/urandom | head -c 16
 }
-
-# Configuration initiale
-APP="Superset"
-DEBIAN_VERSION="12"
-PYTHON_VERSION="3.11"
-
-# Ressources du conteneur
-DISK_SIZE="20" # Go
-CPU_CORES="4"
-RAM_SIZE="4096" # Mo
-
-# Configurations Superset
-ADMIN_USER="admin"
-ADMIN_PASSWORD=${ADMIN_PASSWORD:-$(generate_password)}
-ADMIN_EMAIL="admin@example.com"
-SUPERSET_PORT="8088"
 
 # Couleurs pour les messages
 RED='\033[0;31m'
@@ -45,6 +29,22 @@ msg_error() {
     exit 1
 }
 
+# Configuration initiale
+APP="Superset"
+DEBIAN_VERSION="12"
+PYTHON_VERSION="3.11"
+
+# Ressources du conteneur
+DISK_SIZE="20" # Go
+CPU_CORES="4"
+RAM_SIZE="4096" # Mo
+
+# Configurations Superset
+ADMIN_USER="admin"
+ADMIN_PASSWORD=${ADMIN_PASSWORD:-$(generate_password)}
+ADMIN_EMAIL="admin@example.com"
+SUPERSET_PORT="8088"
+
 # Vérification des prérequis
 check_prerequisites() {
     msg_info "Vérification des prérequis..."
@@ -58,16 +58,6 @@ check_prerequisites() {
     FREE_SPACE=$(df -BG /var/lib/vz | awk 'NR==2 {print $4}' | sed 's/G//')
     if [ "$FREE_SPACE" -lt "$DISK_SIZE" ]; then
         msg_error "Espace disque insuffisant. Requis: ${DISK_SIZE}G, Disponible: ${FREE_SPACE}G."
-    fi
-    
-    # Vérifier la version Debian
-    if [[ ! "$DEBIAN_VERSION" =~ ^[0-9]+$ ]]; then
-        msg_error "La version Debian est invalide."
-    fi
-    
-    # Vérifier la version Python
-    if ! [[ "$PYTHON_VERSION" =~ ^[0-9]+\.[0-9]+$ ]]; then
-        msg_error "La version Python est invalide."
     fi
     
     msg_success "Prérequis validés."
