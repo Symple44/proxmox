@@ -139,13 +139,22 @@ function configure_firewall() {
 }
 
 function motd_ssh_custom() {
-  msg_info "Configuration du message MOTD personnalisé"
-  pct exec $CTID -- bash -c "echo 'Bienvenue sur votre conteneur $APP !' > /etc/motd"
-  if [ $? -ne 0 ]; then
-    msg_error "Échec de la configuration du message MOTD"
-    exit 1
-  fi
-  msg_ok "Message MOTD configuré avec succès"
+  msg_info "Customizing MOTD and SSH access"
+  # Customize MOTD with Superset specific message
+  pct exec $CTID -- bash -c "echo 'Welcome to your Superset LXC container!' > /etc/motd"
+  
+  # Set up auto-login for root on tty1
+  pct exec $CTID -- mkdir -p /etc/systemd/system/container-getty@1.service.d
+  pct exec $CTID -- bash -c "cat <<EOF >/etc/systemd/system/container-getty@1.service.d/override.conf
+[Service]
+ExecStart=
+ExecStart=-/sbin/agetty --autologin root --noclear --keep-baud tty%I 115200,38400,9600 \\$TERM
+EOF"
+
+  # Reload systemd and restart getty service to apply auto-login
+  pct exec $CTID -- systemctl daemon-reload
+  pct exec $CTID -- systemctl restart container-getty@1.service
+  msg_ok "MOTD and SSH access customized"
 }
 
 
