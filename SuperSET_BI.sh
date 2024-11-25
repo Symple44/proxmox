@@ -89,13 +89,13 @@ function configure_postgresql() {
   if [ -z "$POSTGRES_DB" ] || [ -z "$POSTGRES_USER" ] || [ -z "$POSTGRES_PASSWORD" ]; then
     msg_error "Variables PostgreSQL manquantes"
     return 1
-  }
+  fi
 
   # Vérification que PostgreSQL est démarré
   if ! pct exec $CTID -- systemctl is-active postgresql >/dev/null; then
     msg_error "PostgreSQL n'est pas démarré"
     return 1
-  }
+  fi
 
   # Échappement des variables
   POSTGRES_DB_ESCAPED=$(echo "$POSTGRES_DB" | sed 's/"/\\"/g')
