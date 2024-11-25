@@ -98,41 +98,42 @@ function configure_postgresql() {
   SQL_SCRIPT_DB=$(mktemp)
 
   cat <<EOF >"$SQL_SCRIPT"
-  CREATE DATABASE "$POSTGRES_DB";
-  CREATE USER "$POSTGRES_USER" WITH PASSWORD '$POSTGRES_PASSWORD';
-  GRANT ALL PRIVILEGES ON DATABASE "$POSTGRES_DB" TO "$POSTGRES_USER";
-  
-  ALTER DATABASE "$POSTGRES_DB" OWNER TO "$POSTGRES_USER";
-  ALTER SCHEMA public OWNER TO "$POSTGRES_USER";
-  
-  GRANT ALL PRIVILEGES ON SCHEMA public TO "$POSTGRES_USER";
-  GRANT CREATE ON SCHEMA public TO "$POSTGRES_USER";
-  
-  ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO "$POSTGRES_USER";
-  ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO "$POSTGRES_USER";
-  EOF
+CREATE DATABASE "$POSTGRES_DB";
+CREATE USER "$POSTGRES_USER" WITH PASSWORD '$POSTGRES_PASSWORD';
+GRANT ALL PRIVILEGES ON DATABASE "$POSTGRES_DB" TO "$POSTGRES_USER";
+
+ALTER DATABASE "$POSTGRES_DB" OWNER TO "$POSTGRES_USER";
+ALTER SCHEMA public OWNER TO "$POSTGRES_USER";
+
+GRANT ALL PRIVILEGES ON SCHEMA public TO "$POSTGRES_USER";
+GRANT CREATE ON SCHEMA public TO "$POSTGRES_USER";
+
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO "$POSTGRES_USER";
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO "$POSTGRES_USER";
+EOF
+
   
   cat <<EOF >"$SQL_SCRIPT_DB"
-  GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO "$POSTGRES_USER";
-  GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO "$POSTGRES_USER";
-  EOF
+GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO "$POSTGRES_USER";
+GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO "$POSTGRES_USER";
+EOF
   
-    pct push "$CTID" "$SQL_SCRIPT" "/tmp/pgsql_script.sql"
-    pct push "$CTID" "$SQL_SCRIPT_DB" "/tmp/pgsql_script_db.sql"
-  
-    pct exec "$CTID" -- bash -c "su - postgres -c 'psql -f /tmp/pgsql_script.sql'" 2>&1 | tee -a /tmp/pgsql_error.log
-    pct exec "$CTID" -- bash -c "su - postgres -c 'psql -d \"$POSTGRES_DB\" -f /tmp/pgsql_script_db.sql'" 2>&1 | tee -a /tmp/pgsql_error.log
-  
-    if [ $? -ne 0 ]; then
-      msg_error "Échec de la configuration PostgreSQL. Consultez /tmp/pgsql_error.log pour plus de détails"
-      exit 1
-    fi
-  
-    # Nettoyage
-    pct exec "$CTID" -- rm -f /tmp/pgsql_script.sql /tmp/pgsql_script_db.sql
-  
-    msg_ok "PostgreSQL configuré avec succès"
-  }
+  pct push "$CTID" "$SQL_SCRIPT" "/tmp/pgsql_script.sql"
+  pct push "$CTID" "$SQL_SCRIPT_DB" "/tmp/pgsql_script_db.sql"
+
+  pct exec "$CTID" -- bash -c "su - postgres -c 'psql -f /tmp/pgsql_script.sql'" 2>&1 | tee -a /tmp/pgsql_error.log
+  pct exec "$CTID" -- bash -c "su - postgres -c 'psql -d \"$POSTGRES_DB\" -f /tmp/pgsql_script_db.sql'" 2>&1 | tee -a /tmp/pgsql_error.log
+
+  if [ $? -ne 0 ]; then
+    msg_error "Échec de la configuration PostgreSQL. Consultez /tmp/pgsql_error.log pour plus de détails"
+    exit 1
+  fi
+
+  # Nettoyage
+  pct exec "$CTID" -- rm -f /tmp/pgsql_script.sql /tmp/pgsql_script_db.sql
+
+  msg_ok "PostgreSQL configuré avec succès"
+}
 
 
 function install_superset() {
