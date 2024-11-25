@@ -116,10 +116,16 @@ EOF
 GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO "$POSTGRES_USER";
 GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO "$POSTGRES_USER";
 EOF
-  
+
+  # Copier les fichiers dans le conteneur
   pct push "$CTID" "$SQL_SCRIPT" "/tmp/pgsql_script.sql"
   pct push "$CTID" "$SQL_SCRIPT_DB" "/tmp/pgsql_script_db.sql"
 
+  # Vérification des fichiers
+  pct exec "$CTID" -- bash -c "[ -f /tmp/pgsql_script.sql ] || { echo 'Fichier /tmp/pgsql_script.sql introuvable'; exit 1; }"
+  pct exec "$CTID" -- bash -c "[ -f /tmp/pgsql_script_db.sql ] || { echo 'Fichier /tmp/pgsql_script_db.sql introuvable'; exit 1; }"
+
+  # Exécution des scripts SQL
   pct exec "$CTID" -- bash -c "su - postgres -c 'psql -f /tmp/pgsql_script.sql'" 2>&1 | tee -a /tmp/pgsql_error.log
   pct exec "$CTID" -- bash -c "su - postgres -c 'psql -d \"$POSTGRES_DB\" -f /tmp/pgsql_script_db.sql'" 2>&1 | tee -a /tmp/pgsql_error.log
 
@@ -128,9 +134,9 @@ EOF
     exit 1
   fi
 
-  # Nettoyage
-  pct exec "$CTID" -- bash -c "rm -f /tmp/pgsql_script.sql"
-  pct exec "$CTID" -- bash -c "rm -f /tmp/pgsql_script_db.sql"
+  # Nettoyage avec vérification préalable
+  pct exec "$CTID" -- bash -c "[ -f /tmp/pgsql_script.sql ] && rm -f /tmp/pgsql_script.sql"
+  pct exec "$CTID" -- bash -c "[ -f /tmp/pgsql_script_db.sql ] && rm -f /tmp/pgsql_script_db.sql"
 
   msg_ok "PostgreSQL configuré avec succès"
 }
