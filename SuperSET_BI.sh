@@ -128,8 +128,6 @@ EOF"
   msg_ok "Superset initialisé avec succès"
 }
 
-
-
 function configure_firewall() {
   msg_info "Configuration du pare-feu et autorisation du port 8088"
   pct exec $CTID -- bash -c "apt install -y ufw && ufw allow 8088 && ufw --force enable"
@@ -139,6 +137,17 @@ function configure_firewall() {
   fi
   msg_ok "Pare-feu configuré avec succès"
 }
+
+function motd_ssh_custom() {
+  msg_info "Configuration du message MOTD personnalisé"
+  pct exec $CTID -- bash -c "echo 'Bienvenue sur votre conteneur $APP !' > /etc/motd"
+  if [ $? -ne 0 ]; then
+    msg_error "Échec de la configuration du message MOTD"
+    exit 1
+  fi
+  msg_ok "Message MOTD configuré avec succès"
+}
+
 
 function main() {
   install_dependencies
