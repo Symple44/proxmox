@@ -38,7 +38,7 @@ PYTHON_VERSION="3.11"
 DISK_SIZE="20" # Go
 CPU_CORES="4"
 RAM_SIZE="4096" # Mo
-
+echo "test"
 # Configurations Superset
 msg_info "Mot de passe généré : $(generate_password)"
 ADMIN_USER="admin"
