@@ -105,28 +105,29 @@ CACHE_CONFIG = {
 }
 EOF"
 
-  # Initialisation de Superset
+  # Initialisation de Superset avec FLASK_APP défini
   msg_info "Initialisation de Superset"
-  pct exec $CTID -- bash -c "source /opt/superset-venv/bin/activate && export SUPERSET_CONFIG_PATH=/opt/superset-venv/superset_config.py && superset db upgrade"
+  pct exec $CTID -- bash -c "source /opt/superset-venv/bin/activate && export FLASK_APP=superset && export SUPERSET_CONFIG_PATH=/opt/superset-venv/superset_config.py && superset db upgrade"
   if [ $? -ne 0 ]; then
     msg_error "Échec de la mise à jour de la base de données Superset"
     exit 1
   fi
 
-  pct exec $CTID -- bash -c "source /opt/superset-venv/bin/activate && export SUPERSET_CONFIG_PATH=/opt/superset-venv/superset_config.py && superset fab create-admin \
+  pct exec $CTID -- bash -c "source /opt/superset-venv/bin/activate && export FLASK_APP=superset && export SUPERSET_CONFIG_PATH=/opt/superset-venv/superset_config.py && superset fab create-admin \
     --username admin --firstname Admin --lastname User --email admin@example.com --password $ADMIN_PASSWORD"
   if [ $? -ne 0 ]; then
     msg_error "Échec de la création de l'utilisateur administrateur Superset"
     exit 1
   fi
 
-  pct exec $CTID -- bash -c "source /opt/superset-venv/bin/activate && export SUPERSET_CONFIG_PATH=/opt/superset-venv/superset_config.py && superset init"
+  pct exec $CTID -- bash -c "source /opt/superset-venv/bin/activate && export FLASK_APP=superset && export SUPERSET_CONFIG_PATH=/opt/superset-venv/superset_config.py && superset init"
   if [ $? -ne 0 ]; then
     msg_error "Échec de l'initialisation de Superset"
     exit 1
   fi
   msg_ok "Superset initialisé avec succès"
 }
+
 
 
 function configure_firewall() {
