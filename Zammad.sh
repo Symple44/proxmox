@@ -188,8 +188,24 @@ function install_zammad() {
   pct exec "$CTID" -- bash -c "mkdir -p /opt/zammad && tar -xzf /tmp/zammad-latest.tar.gz --strip-components=1 -C /opt/zammad"
   # Nettoyer après l'installation
   pct exec "$CTID" -- bash -c "rm -f /tmp/zammad-latest.tar.gz"
-  msg_ok "Zammad installé avec succès"
+  msg_ok "Zammad installé et configuré pour la production"
 }
+function configure_zammad() {
+  msg_info "Configuration de Zammad pour la production"
+
+  # Configurer la base de données
+  pct exec "$CTID" -- bash -c "su - zammad -c 'cd /opt/zammad && RAILS_ENV=production rake db:create db:migrate'"
+
+  # Précompiler les assets
+  pct exec "$CTID" -- bash -c "su - zammad -c 'cd /opt/zammad && RAILS_ENV=production rake assets:precompile'"
+
+  # Configurer Elasticsearch pour Zammad
+  pct exec "$CTID" -- bash -c "su - zammad -c 'cd /opt/zammad && RAILS_ENV=production rails r \"Setting.set('es_url', 'http://localhost:9200')\"'"
+  pct exec "$CTID" -- bash -c "su - zammad -c 'cd /opt/zammad && RAILS_ENV=production rake searchindex:rebuild'"
+
+  msg_ok "Zammad configuré pour la production"
+}
+
 
 function configure_elasticsearch() {
   msg_info "Installation et configuration d'Elasticsearch"
@@ -205,13 +221,6 @@ function configure_elasticsearch() {
     systemctl enable elasticsearch --now && \
     sed -i 's/#network.host: 192.168.0.1/network.host: 127.0.0.1/' /etc/elasticsearch/elasticsearch.yml && \
     systemctl restart elasticsearch"
-
-  # Installer les dépendances Zammad
-  pct exec "$CTID" -- bash -c "su - zammad -c 'cd /opt/zammad && bundle install --jobs 4 --retry 3'"
-
-  # Configurer Elasticsearch dans Zammad
-  pct exec "$CTID" -- bash -c "su - zammad -c 'cd /opt/zammad && rails r \"Setting.set('es_url', 'http://localhost:9200')\"'"
-  pct exec "$CTID" -- bash -c "su - zammad -c 'cd /opt/zammad && rake searchindex:rebuild'"
 
   if [ $? -ne 0 ]; then
     msg_error "Échec de la configuration d'Elasticsearch dans Zammad"
@@ -269,6 +278,7 @@ function main() {
   install_nodejs
   install_rvm_ruby
   install_zammad
+  configure_zammad
   configure_elasticsearch
   install_systemd_service
 }
