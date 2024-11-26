@@ -190,32 +190,34 @@ function install_zammad() {
   msg_ok "Zammad installé avec succès"
 }
 
-
 function configure_elasticsearch() {
   msg_info "Installation et configuration d'Elasticsearch"
 
   # Ajouter les dépôts nécessaires
   pct exec "$CTID" -- bash -c "apt-get update"
   
-  # Essayer d'installer OpenJDK 11
-  pct exec "$CTID" -- bash -c "apt-get install -y apt-transport-https openjdk-11-jre-headless || \
-  (echo 'OpenJDK 11 indisponible, tentative avec OpenJDK 17' && apt-get install -y openjdk-17-jre-headless)"
+  # Installer Elasticsearch et ses dépendances
+  pct exec "$CTID" -- bash -c "apt-get install -y apt-transport-https openjdk-17-jre-headless && \
+    wget -qO - https://artifacts.elastic.co/GPG-KEY-elasticsearch | apt-key add - && \
+    echo 'deb https://artifacts.elastic.co/packages/7.x/apt stable main' > /etc/apt/sources.list.d/elastic-7.x.list && \
+    apt-get update && apt-get install -y elasticsearch && \
+    systemctl enable elasticsearch --now && \
+    sed -i 's/#network.host: 192.168.0.1/network.host: 127.0.0.1/' /etc/elasticsearch/elasticsearch.yml && \
+    systemctl restart elasticsearch"
 
-  # Installer Elasticsearch
-  pct exec "$CTID" -- bash -c "wget -qO - https://artifacts.elastic.co/GPG-KEY-elasticsearch | apt-key add -"
-  pct exec "$CTID" -- bash -c "echo 'deb https://artifacts.elastic.co/packages/7.x/apt stable main' > /etc/apt/sources.list.d/elastic-7.x.list"
-  pct exec "$CTID" -- bash -c "apt-get update && apt-get install -y elasticsearch"
+  # Installer les dépendances Zammad
+  pct exec "$CTID" -- bash -c "su - zammad -c 'cd /opt/zammad && bundle install --jobs 4 --retry 3'"
 
-  # Configurer Elasticsearch
-  pct exec "$CTID" -- bash -c "systemctl enable elasticsearch --now"
-  pct exec "$CTID" -- bash -c "sed -i 's/#network.host: 192.168.0.1/network.host: 127.0.0.1/' /etc/elasticsearch/elasticsearch.yml"
-  pct exec "$CTID" -- bash -c "systemctl restart elasticsearch"
+  # Configurer Elasticsearch dans Zammad
   pct exec "$CTID" -- bash -c "su - zammad -c 'cd /opt/zammad && rails r \"Setting.set('es_url', 'http://localhost:9200')\"'"
   pct exec "$CTID" -- bash -c "su - zammad -c 'cd /opt/zammad && rake searchindex:rebuild'"
 
+  if [ $? -ne 0 ]; then
+    msg_error "Échec de la configuration d'Elasticsearch dans Zammad"
+    exit 1
+  fi
   msg_ok "Elasticsearch installé et configuré"
 }
-
 
 function install_systemd_service() {
   msg_info "Installation des services systemd pour Zammad"
