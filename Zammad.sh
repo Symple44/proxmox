@@ -170,7 +170,7 @@ function install_rvm_ruby() {
   # Ajouter l'utilisateur zammad au groupe rvm
   pct exec "$CTID" -- bash -c "usermod -a -G rvm zammad"
   # Installer Ruby via RVM
-  pct exec "$CTID" -- bash -c "source /usr/local/rvm/scripts/rvm && rvm install 3.2.3 && rvm use 3.2.3 --default"
+  pct exec "$CTID" -- bash -c "source /usr/local/rvm/scripts/rvm && rvm install 3.2.4 && rvm use 3.2.4 --default"
   # Installer les gems nécessaires
   pct exec "$CTID" -- bash -c "source /usr/local/rvm/scripts/rvm && gem install bundler rake rails"
   msg_ok "RVM et Ruby installés avec succès"
