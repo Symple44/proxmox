@@ -162,14 +162,21 @@ function install_nodejs() {
 
 function install_rvm_ruby() {
   msg_info "Installation de RVM et Ruby"
-  pct exec "$CTID" -- bash -c "gpg --keyserver keyserver.ubuntu.com --recv-keys 409B6B1796C275462A1703113804BB82D39DC0E3 7D2BAF1CF37B13E2069D6956105BD0E739499BDB || \
+  
+  # Importer les clés GPG nécessaires pour RVM
+  pct exec "$CTID" -- bash -c "gpg --keyserver keyserver.ubuntu.com --recv-keys 409B6B1796C275462A1703113804BB82D39DC0E3 || \
   (curl -sSL https://rvm.io/mpapis.asc | gpg --import - && curl -sSL https://rvm.io/pkuczynski.asc | gpg --import -)"
+  # Installer RVM
   pct exec "$CTID" -- bash -c "curl -sSL https://get.rvm.io | bash -s stable"
+  # Ajouter l'utilisateur zammad au groupe rvm
   pct exec "$CTID" -- bash -c "usermod -a -G rvm zammad"
+  # Installer Ruby via RVM
   pct exec "$CTID" -- bash -c "source /usr/local/rvm/scripts/rvm && rvm install 3.2.3 && rvm use 3.2.3 --default"
-  pct exec "$CTID" -- bash -c "gem install bundler rake rails"
+  # Installer les gems nécessaires
+  pct exec "$CTID" -- bash -c "source /usr/local/rvm/scripts/rvm && gem install bundler rake rails"
   msg_ok "RVM et Ruby installés avec succès"
 }
+
 
 function install_zammad() {
   msg_info "Téléchargement et installation de Zammad"
