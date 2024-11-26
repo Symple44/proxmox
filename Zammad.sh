@@ -60,7 +60,7 @@ function install_dependencies() {
   pct exec "$CTID" -- bash -c "apt-get update --fix-missing && apt-get upgrade -y"
   pct exec "$CTID" -- bash -c "apt-get install -y build-essential libssl-dev libffi-dev python3 python3-pip python3-dev \
     libsasl2-dev libldap2-dev python3.11-venv redis-server libpq-dev mariadb-client libmariadb-dev libmariadb-dev-compat \
-    freetds-dev unixodbc-dev default-libmysqlclient-dev curl locales postgresql"
+    freetds-dev unixodbc-dev default-libmysqlclient-dev curl locales postgresql git"
   if [ $? -ne 0 ]; then
     msg_error "Échec de l'installation des dépendances"
     exit 1
