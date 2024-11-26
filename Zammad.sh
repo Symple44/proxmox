@@ -111,8 +111,8 @@ function configure_postgresql() {
   SQL_SCRIPT_DB=$(mktemp)
 
   cat <<EOF >"$SQL_SCRIPT"
-CREATE DATABASE "$POSTGRES_DB";
-CREATE USER "$POSTGRES_USER" WITH PASSWORD '$POSTGRES_PASSWORD';
+CREATE DATABASE "$POSTGRES_DB" ENCODING 'UTF8' TEMPLATE template0;
+CREATE USER "$POSTGRES_USER" WITH PASSWORD '$POSTGRES_PASSWORD' ;
 GRANT ALL PRIVILEGES ON DATABASE "$POSTGRES_DB" TO "$POSTGRES_USER";
 
 ALTER DATABASE "$POSTGRES_DB" OWNER TO "$POSTGRES_USER";
@@ -219,6 +219,20 @@ function configure_elasticsearch() {
   fi
   msg_ok "Elasticsearch installé et configuré"
 }
+function configure_database_yml() {
+  msg_info "Configuration du fichier database.yml"
+  pct exec "$CTID" -- bash -c "cp /opt/zammad/config/database.yml.dist /opt/zammad/config/database.yml"
+  pct exec "$CTID" -- bash -c "sed -i 's/adapter: mysql2/adapter: postgresql/' /opt/zammad/config/database.yml"
+  pct exec "$CTID" -- bash -c "sed -i 's/database:.*/database: $POSTGRES_DB/' /opt/zammad/config/database.yml"
+  pct exec "$CTID" -- bash -c "sed -i 's/user:.*/user: $POSTGRES_USER/' /opt/zammad/config/database.yml"
+  pct exec "$CTID" -- bash -c "sed -i 's/password:.*/password: $POSTGRES_PASSWORD/' /opt/zammad/config/database.yml"
+  pct exec "$CTID" -- bash -c "sed -i 's/host:.*/host: localhost/' /opt/zammad/config/database.yml"
+  if [ $? -ne 0 ]; then
+    msg_error "Échec de la configuration de database.yml"
+    exit 1
+  fi
+  msg_ok "Fichier database.yml configuré avec succès"
+}
 
 function install_systemd_service() {
   msg_info "Installation des services systemd pour Zammad"
@@ -251,6 +265,7 @@ function main() {
   configure_locales
   create_zammad_user 
   configure_postgresql
+  configure_database_yml
   install_nodejs
   install_rvm_ruby
   install_zammad
