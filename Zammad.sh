@@ -52,36 +52,32 @@ function default_settings() {
   echo_default
 }
 
+function configure_locales() {
+  msg_info "Configuration des paramètres régionaux dans le conteneur"
+  pct exec "$CTID" -- bash -c "apt install -y locales"
+  pct exec "$CTID" -- bash -c "echo 'LANG=en_US.UTF-8' > /etc/default/locale"
+  pct exec "$CTID" -- bash -c "echo 'en_US.UTF-8 UTF-8' >> /etc/locale.gen"
+  pct exec "$CTID" -- bash -c "locale-gen en_US.UTF-8"
+  if [ $? -ne 0 ]; then
+    msg_error "Échec de la configuration des paramètres régionaux"
+    exit 1
+  fi
+  msg_ok "Paramètres régionaux configurés avec succès"
+}
+
 function install_dependencies() {
   header_info
   msg_info "Installation des dépendances système"
   
-  # Mise à jour des dépôts
   pct exec "$CTID" -- bash -c "apt-get update --fix-missing && apt-get upgrade -y"
-  if [ $? -ne 0 ]; then
-    msg_error "Échec de la mise à jour des dépôts."
-    exit 1
-  fi
-
-  # Installation des dépendances
   pct exec "$CTID" -- bash -c "apt-get install -y build-essential libssl-dev libffi-dev python3 python3-pip python3-dev \
     libsasl2-dev libldap2-dev python3.11-venv redis-server libpq-dev mariadb-client libmariadb-dev libmariadb-dev-compat \
-    freetds-dev unixodbc-dev default-libmysqlclient-dev curl locales ca-certificates gnupg software-properties-common"
+    freetds-dev unixodbc-dev default-libmysqlclient-dev curl locales postgresql"
   if [ $? -ne 0 ]; then
-    msg_error "Échec de l'installation des dépendances système."
+    msg_error "Échec de l'installation des dépendances"
     exit 1
   fi
-
-  # Configuration des locales
-  msg_info "Configuration des locales (en_US.UTF-8)"
-  pct exec "$CTID" -- bash -c "apt install -y locales && echo 'LANG=en_US.UTF-8' > /etc/default/locale"
-  pct exec "$CTID" -- bash -c "echo 'en_US.UTF-8 UTF-8' >> /etc/locale.gen && locale-gen en_US.UTF-8"
-  if [ $? -ne 0 ]; then
-    msg_error "Échec de la configuration des locales."
-    exit 1
-  fi
-
-  msg_ok "Dépendances système installées et locales configurées avec succès"
+  msg_ok "Dépendances système installées avec succès"
 }
 
 function create_zammad_user() {
@@ -156,6 +152,7 @@ function install_systemd_service() {
 
 function main() {
   install_dependencies
+  configure_locales
   create_zammad_user
   install_postgresql
   install_nodejs
