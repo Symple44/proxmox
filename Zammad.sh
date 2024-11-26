@@ -81,26 +81,64 @@ function install_dependencies() {
   msg_ok "Dépendances système installées avec succès"
 }
 
-function create_zammad_user() {
-  msg_info "Création de l'utilisateur Zammad"
+function configure_postgresql() {
+  msg_info "Configuration de PostgreSQL"
 
-  # Vérifier et créer le groupe Zammad
-  pct exec "$CTID" -- bash -c "getent group zammad || groupadd zammad"
+  if [ -z "$POSTGRES_DB" ] || [ -z "$POSTGRES_USER" ] || [ -z "$POSTGRES_PASSWORD" ]; then
+    msg_error "Variables PostgreSQL manquantes"
+    exit 1
+  fi
 
-  # Vérifier et créer l'utilisateur Zammad
-  pct exec "$CTID" -- bash -c "id -u zammad &>/dev/null || useradd zammad -m -d /opt/zammad -s /bin/bash"
+  if ! pct exec "$CTID" -- systemctl is-active postgresql >/dev/null; then
+    msg_error "PostgreSQL n'est pas démarré"
+    exit 1
+  fi
 
-  msg_ok "Utilisateur et groupe Zammad configurés ou déjà existants"
-}
+  SQL_SCRIPT=$(mktemp)
+  SQL_SCRIPT_DB=$(mktemp)
 
-function install_postgresql() {
-  msg_info "Installation de PostgreSQL"
-  pct exec "$CTID" -- bash -c "apt-get install -y postgresql postgresql-contrib libpq-dev"
-  pct exec "$CTID" -- bash -c "systemctl enable postgresql --now"
-  pct exec "$CTID" -- bash -c "sudo -u postgres psql -c \"CREATE DATABASE $POSTGRES_DB;\""
-  pct exec "$CTID" -- bash -c "sudo -u postgres psql -c \"CREATE USER $POSTGRES_USER WITH PASSWORD '$POSTGRES_PASSWORD';\""
-  pct exec "$CTID" -- bash -c "sudo -u postgres psql -c \"GRANT ALL PRIVILEGES ON DATABASE $POSTGRES_DB TO $POSTGRES_USER;\""
-  msg_ok "PostgreSQL installé et configuré"
+  cat <<EOF >"$SQL_SCRIPT"
+CREATE DATABASE "$POSTGRES_DB";
+CREATE USER "$POSTGRES_USER" WITH PASSWORD '$POSTGRES_PASSWORD';
+GRANT ALL PRIVILEGES ON DATABASE "$POSTGRES_DB" TO "$POSTGRES_USER";
+
+ALTER DATABASE "$POSTGRES_DB" OWNER TO "$POSTGRES_USER";
+ALTER SCHEMA public OWNER TO "$POSTGRES_USER";
+
+GRANT ALL PRIVILEGES ON SCHEMA public TO "$POSTGRES_USER";
+GRANT CREATE ON SCHEMA public TO "$POSTGRES_USER";
+
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO "$POSTGRES_USER";
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO "$POSTGRES_USER";
+EOF
+
+  cat <<EOF >"$SQL_SCRIPT_DB"
+GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO "$POSTGRES_USER";
+GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO "$POSTGRES_USER";
+EOF
+
+  # Copier les fichiers dans le conteneur
+  pct push "$CTID" "$SQL_SCRIPT" "/tmp/pgsql_script.sql"
+  pct push "$CTID" "$SQL_SCRIPT_DB" "/tmp/pgsql_script_db.sql"
+
+  # Vérification des fichiers avant exécution
+  pct exec "$CTID" -- bash -c "[ -f /tmp/pgsql_script.sql ] || { echo 'Fichier /tmp/pgsql_script.sql introuvable'; exit 1; }"
+  pct exec "$CTID" -- bash -c "[ -f /tmp/pgsql_script_db.sql ] || { echo 'Fichier /tmp/pgsql_script_db.sql introuvable'; exit 1; }"
+
+  # Exécution des scripts SQL
+  pct exec "$CTID" -- bash -c "su - postgres -c 'psql -f /tmp/pgsql_script.sql'" 2>&1 | tee -a /tmp/pgsql_error.log
+  pct exec "$CTID" -- bash -c "su - postgres -c 'psql -d \"$POSTGRES_DB\" -f /tmp/pgsql_script_db.sql'" 2>&1 | tee -a /tmp/pgsql_error.log
+
+  if [ $? -ne 0 ]; then
+    msg_error "Échec de la configuration PostgreSQL. Consultez /tmp/pgsql_error.log pour plus de détails"
+    exit 1
+  fi
+
+  # Nettoyage des fichiers avec des vérifications
+  pct exec "$CTID" -- bash -c "if [ -f /tmp/pgsql_script.sql ]; then rm -f /tmp/pgsql_script.sql; else echo '/tmp/pgsql_script.sql non trouvé'; fi"
+  pct exec "$CTID" -- bash -c "if [ -f /tmp/pgsql_script_db.sql ]; then rm -f /tmp/pgsql_script_db.sql; else echo '/tmp/pgsql_script_db.sql non trouvé'; fi"
+
+  msg_ok "PostgreSQL configuré avec succès"
 }
 
 function install_nodejs() {
@@ -154,8 +192,7 @@ function install_systemd_service() {
 function main() {
   install_dependencies
   configure_locales
-  create_zammad_user
-  install_postgresql
+  configure_postgresql
   install_nodejs
   install_rvm_ruby
   install_zammad
