@@ -53,19 +53,6 @@ function default_settings() {
   echo_default
 }
 
-function configure_locales() {
-  msg_info "Configuration des paramètres régionaux dans le conteneur"
-  pct exec "$CTID" -- bash -c "apt install -y locales"
-  pct exec "$CTID" -- bash -c "echo 'LANG=en_US.UTF-8' > /etc/default/locale"
-  pct exec "$CTID" -- bash -c "echo 'en_US.UTF-8 UTF-8' >> /etc/locale.gen"
-  pct exec "$CTID" -- bash -c "locale-gen en_US.UTF-8"
-  if [ $? -ne 0 ]; then
-    msg_error "Échec de la configuration des paramètres régionaux"
-    exit 1
-  fi
-  msg_ok "Paramètres régionaux configurés avec succès"
-}
-
 function install_dependencies() {
   header_info
   msg_info "Installation des dépendances système"
@@ -79,6 +66,31 @@ function install_dependencies() {
     exit 1
   fi
   msg_ok "Dépendances système installées avec succès"
+}
+
+function configure_locales() {
+  msg_info "Configuration des paramètres régionaux dans le conteneur"
+  pct exec "$CTID" -- bash -c "apt install -y locales"
+  pct exec "$CTID" -- bash -c "echo 'LANG=en_US.UTF-8' > /etc/default/locale"
+  pct exec "$CTID" -- bash -c "echo 'en_US.UTF-8 UTF-8' >> /etc/locale.gen"
+  pct exec "$CTID" -- bash -c "locale-gen en_US.UTF-8"
+  if [ $? -ne 0 ]; then
+    msg_error "Échec de la configuration des paramètres régionaux"
+    exit 1
+  fi
+  msg_ok "Paramètres régionaux configurés avec succès"
+}
+
+function create_zammad_user() {
+  msg_info "Création de l'utilisateur Zammad"
+
+  # Vérifier et créer le groupe Zammad
+  pct exec "$CTID" -- bash -c "getent group zammad || groupadd zammad"
+
+  # Vérifier et créer l'utilisateur Zammad
+  pct exec "$CTID" -- bash -c "id -u zammad &>/dev/null || useradd zammad -m -d /opt/zammad -s /bin/bash"
+
+  msg_ok "Utilisateur et groupe Zammad configurés ou déjà existants"
 }
 
 function configure_postgresql() {
@@ -193,6 +205,7 @@ function install_systemd_service() {
 function main() {
   install_dependencies
   configure_locales
+  create_zammad_user 
   configure_postgresql
   install_nodejs
   install_rvm_ruby
