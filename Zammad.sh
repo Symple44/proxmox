@@ -274,11 +274,11 @@ function main() {
   configure_locales
   create_zammad_user 
   configure_postgresql
-  configure_database_yml
   install_nodejs
   install_rvm_ruby
   install_zammad
   configure_zammad
+  configure_database_yml
   configure_elasticsearch
   install_systemd_service
 }
