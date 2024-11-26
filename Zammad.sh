@@ -87,8 +87,8 @@ function create_zammad_user() {
   # Vérifier et créer le groupe Zammad
   pct exec "$CTID" -- bash -c "getent group zammad || groupadd zammad"
 
-  # Vérifier et créer l'utilisateur Zammad
-  pct exec "$CTID" -- bash -c "id -u zammad &>/dev/null || useradd zammad -m -d /opt/zammad -s /bin/bash"
+  # Vérifier et créer l'utilisateur Zammad, en le liant au groupe existant
+  pct exec "$CTID" -- bash -c "id -u zammad &>/dev/null || useradd -m -d /opt/zammad -s /bin/bash -g zammad zammad"
 
   msg_ok "Utilisateur et groupe Zammad configurés ou déjà existants"
 }
