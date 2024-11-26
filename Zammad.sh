@@ -162,37 +162,34 @@ function install_nodejs() {
 
 function install_rvm_ruby() {
   msg_info "Installation de RVM et Ruby"
-
   # Importer les clés GPG nécessaires pour RVM
   pct exec "$CTID" -- bash -c "gpg --keyserver hkp://keyserver.ubuntu.com --recv-keys 409B6B1796C275462A1703113804BB82D39DC0E3 7D2BAF1CF37B13E2069D6956105BD0E739499BDB || \
   (curl -sSL https://rvm.io/mpapis.asc | gpg --import - && curl -sSL https://rvm.io/pkuczynski.asc | gpg --import -)"
-
   # Installer RVM
   pct exec "$CTID" -- bash -c "curl -sSL https://get.rvm.io | bash -s stable"
-
   # Ajouter l'utilisateur zammad au groupe rvm
   pct exec "$CTID" -- bash -c "usermod -a -G rvm zammad"
-
   # Installer Ruby via RVM
   pct exec "$CTID" -- bash -c "source /usr/local/rvm/scripts/rvm && rvm install 3.2.3 && rvm use 3.2.3 --default"
-
   # Installer les gems nécessaires
   pct exec "$CTID" -- bash -c "source /usr/local/rvm/scripts/rvm && gem install bundler rake rails"
-
   msg_ok "RVM et Ruby installés avec succès"
 }
 
 
-
 function install_zammad() {
   msg_info "Téléchargement et installation de Zammad"
-  pct exec "$CTID" -- bash -c "cd /opt && wget https://ftp.zammad.com/zammad-latest.tar.gz"
-  pct exec "$CTID" -- bash -c "mkdir -p /opt/zammad && tar -xzf zammad-latest.tar.gz --strip-components=1 -C /opt/zammad"
-  pct exec "$CTID" -- bash -c "chown -R zammad:zammad /opt/zammad && rm -f /opt/zammad-latest.tar.gz"
-  pct exec "$CTID" -- bash -c "su - zammad -c 'cd /opt/zammad && bundle config set without \"test development mysql\" && bundle install'"
-  pct exec "$CTID" -- bash -c "su - zammad -c 'cd /opt/zammad && yarn install'"
+  # Téléchargement du fichier Zammad
+  pct exec "$CTID" -- bash -c "wget -O /tmp/zammad-latest.tar.gz https://ftp.zammad.com/zammad-latest.tar.gz"
+  # Vérifier si le fichier a été téléchargé
+  pct exec "$CTID" -- bash -c "if [ ! -f /tmp/zammad-latest.tar.gz ]; then echo 'Fichier non trouvé'; exit 1; fi"
+  # Extraire le fichier téléchargé
+  pct exec "$CTID" -- bash -c "mkdir -p /opt/zammad && tar -xzf /tmp/zammad-latest.tar.gz --strip-components=1 -C /opt/zammad"
+  # Nettoyer après l'installation
+  pct exec "$CTID" -- bash -c "rm -f /tmp/zammad-latest.tar.gz"
   msg_ok "Zammad installé avec succès"
 }
+
 
 function configure_elasticsearch() {
   msg_info "Installation et configuration d'Elasticsearch"
@@ -215,6 +212,25 @@ function install_systemd_service() {
   msg_ok "Services systemd de Zammad installés et démarrés"
 }
 
+function motd_ssh_custom() {
+  msg_info "Customizing MOTD and SSH access"
+  # Customize MOTD with Superset specific message
+  pct exec $CTID -- bash -c "echo 'Welcome to your Zammad LXC container!' > /etc/motd"
+  
+  # Set up auto-login for root on tty1
+  pct exec $CTID -- mkdir -p /etc/systemd/system/container-getty@1.service.d
+  pct exec $CTID -- bash -c "cat <<EOF >/etc/systemd/system/container-getty@1.service.d/override.conf
+[Service]
+ExecStart=
+ExecStart=-/sbin/agetty --autologin root --noclear --keep-baud tty%I 115200,38400,9600 \\$TERM
+EOF"
+
+  # Reload systemd and restart getty service to apply auto-login
+  pct exec $CTID -- systemctl daemon-reload
+  pct exec $CTID -- systemctl restart container-getty@1.service
+  msg_ok "MOTD and SSH access customized"
+}
+
 function main() {
   install_dependencies
   configure_locales
@@ -231,6 +247,7 @@ header_info
 start
 build_container
 main
+motd_ssh_custom
 description
 
 IP=$(pct exec "$CTID" -- hostname -I | awk '{print $1}')
