@@ -299,8 +299,8 @@ function main() {
   install_nodejs
   install_rvm_ruby
   install_zammad
-  configure_zammad
   configure_database_yml
+  configure_zammad
   configure_elasticsearch
   install_systemd_service
 }
