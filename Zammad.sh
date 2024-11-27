@@ -241,16 +241,15 @@ function configure_database_yml() {
   pct exec "$CTID" -- bash -c "cp /opt/zammad/config/database/database.yml /opt/zammad/config/database.yml"
 
   # Décommenter et remplacer les balises nécessaires
-  pct exec "$CTID" -- bash -c "sed -i 's/# *adapter:.*/adapter: postgresql/' /opt/zammad/config/database.yml"
-  pct exec "$CTID" -- bash -c "sed -i 's/# *database:.*/database: $POSTGRES_DB/' /opt/zammad/config/database.yml"
-  pct exec "$CTID" -- bash -c "sed -i 's/# *user:.*/user: $POSTGRES_USER/' /opt/zammad/config/database.yml"
-  pct exec "$CTID" -- bash -c "sed -i 's/# *password:.*/password: $POSTGRES_PASSWORD/' /opt/zammad/config/database.yml"
-  pct exec "$CTID" -- bash -c "sed -i 's/# *host:.*/host: localhost/' /opt/zammad/config/database.yml"
+  pct exec "$CTID" -- bash -c "sed -i '/^default: &default/,/^$/s/# *adapter:.*/  adapter: postgresql/' /opt/zammad/config/database.yml"
+  pct exec "$CTID" -- bash -c "sed -i '/^default: &default/,/^$/s/# *encoding:.*/  encoding: utf8/' /opt/zammad/config/database.yml"
+  pct exec "$CTID" -- bash -c "sed -i '/^default: &default/,/^$/s/# *host:.*/  host: localhost/' /opt/zammad/config/database.yml"
 
-  # Ajouter ou remplacer la ligne pour `template`
-  pct exec "$CTID" -- bash -c "grep -q 'template:' /opt/zammad/config/database.yml && \
-    sed -i 's/# *template:.*/template: template0/' /opt/zammad/config/database.yml || \
-    echo 'template: template0' >> /opt/zammad/config/database.yml"
+  # Ajouter ou remplacer la ligne pour `template` dans `default: &default`
+  pct exec "$CTID" -- bash -c "sed -i '/^default: &default/,/^$/{
+    /template:/d
+    /host: localhost/a\  template: template0
+  }' /opt/zammad/config/database.yml"
 
   # Ajuster les permissions
   pct exec "$CTID" -- bash -c "chown zammad:zammad /opt/zammad/config/database.yml"
@@ -263,6 +262,7 @@ function configure_database_yml() {
 
   msg_ok "Fichier database.yml configuré avec succès"
 }
+
 
 
 function install_systemd_service() {
