@@ -24,7 +24,7 @@ var_os="debian"
 var_version="12"
 POSTGRES_DB="zammad"
 POSTGRES_USER="zammad"
-POSTGRES_PASSWORD="Zammad2024!"
+POSTGRES_PASSWORD="Zammad2024"
 variables
 color
 catch_errors
@@ -114,6 +114,7 @@ function configure_postgresql() {
 CREATE DATABASE "$POSTGRES_DB" ENCODING 'UTF8' TEMPLATE template0;
 CREATE USER "$POSTGRES_USER" WITH PASSWORD '$POSTGRES_PASSWORD' ;
 GRANT ALL PRIVILEGES ON DATABASE "$POSTGRES_DB" TO "$POSTGRES_USER";
+ALTER USER "$POSTGRES_USER" CREATEDB;
 
 ALTER DATABASE "$POSTGRES_DB" OWNER TO "$POSTGRES_USER";
 ALTER SCHEMA public OWNER TO "$POSTGRES_USER";
@@ -192,6 +193,8 @@ function install_zammad() {
 }
 function configure_zammad() {
   msg_info "Configuration de Zammad pour la production"
+  
+  pct exec "$CTID" -- bash -c "su - zammad -c 'cd /opt/zammad && RAILS_ENV=production bundle install --jobs 4 --retry 3'"
 
   # Configurer la base de données
   pct exec "$CTID" -- bash -c "su - zammad -c 'cd /opt/zammad && RAILS_ENV=production rake db:create db:migrate'"
@@ -230,18 +233,37 @@ function configure_elasticsearch() {
 }
 function configure_database_yml() {
   msg_info "Configuration du fichier database.yml"
-  pct exec "$CTID" -- bash -c "cp /opt/zammad/config/database.yml.dist /opt/zammad/config/database.yml"
-  pct exec "$CTID" -- bash -c "sed -i 's/adapter: mysql2/adapter: postgresql/' /opt/zammad/config/database.yml"
-  pct exec "$CTID" -- bash -c "sed -i 's/database:.*/database: $POSTGRES_DB/' /opt/zammad/config/database.yml"
-  pct exec "$CTID" -- bash -c "sed -i 's/user:.*/user: $POSTGRES_USER/' /opt/zammad/config/database.yml"
-  pct exec "$CTID" -- bash -c "sed -i 's/password:.*/password: $POSTGRES_PASSWORD/' /opt/zammad/config/database.yml"
-  pct exec "$CTID" -- bash -c "sed -i 's/host:.*/host: localhost/' /opt/zammad/config/database.yml"
+
+  # Vérifier si le fichier source existe
+  pct exec "$CTID" -- bash -c "[ -f /opt/zammad/config/database/database.yml ] || { echo 'Source file missing'; exit 1; }"
+
+  # Copier le fichier source vers le bon emplacement
+  pct exec "$CTID" -- bash -c "cp /opt/zammad/config/database/database.yml /opt/zammad/config/database.yml"
+
+  # Décommenter et remplacer les balises nécessaires
+  pct exec "$CTID" -- bash -c "sed -i 's/# *adapter:.*/adapter: postgresql/' /opt/zammad/config/database.yml"
+  pct exec "$CTID" -- bash -c "sed -i 's/# *database:.*/database: $POSTGRES_DB/' /opt/zammad/config/database.yml"
+  pct exec "$CTID" -- bash -c "sed -i 's/# *user:.*/user: $POSTGRES_USER/' /opt/zammad/config/database.yml"
+  pct exec "$CTID" -- bash -c "sed -i 's/# *password:.*/password: $POSTGRES_PASSWORD/' /opt/zammad/config/database.yml"
+  pct exec "$CTID" -- bash -c "sed -i 's/# *host:.*/host: localhost/' /opt/zammad/config/database.yml"
+
+  # Ajouter ou remplacer la ligne pour `template`
+  pct exec "$CTID" -- bash -c "grep -q 'template:' /opt/zammad/config/database.yml && \
+    sed -i 's/# *template:.*/template: template0/' /opt/zammad/config/database.yml || \
+    echo 'template: template0' >> /opt/zammad/config/database.yml"
+
+  # Ajuster les permissions
+  pct exec "$CTID" -- bash -c "chown zammad:zammad /opt/zammad/config/database.yml"
+  pct exec "$CTID" -- bash -c "chmod 600 /opt/zammad/config/database.yml"
+
   if [ $? -ne 0 ]; then
     msg_error "Échec de la configuration de database.yml"
     exit 1
   fi
+
   msg_ok "Fichier database.yml configuré avec succès"
 }
+
 
 function install_systemd_service() {
   msg_info "Installation des services systemd pour Zammad"
