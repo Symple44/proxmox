@@ -188,7 +188,7 @@ function install_zammad() {
   # Extraire le fichier téléchargé
   pct exec "$CTID" -- bash -c "mkdir -p /opt/zammad && tar -xzf /tmp/zammad-latest.tar.gz --strip-components=1 -C /opt/zammad"
   # Nettoyer après l'installation
-  pct exec "$CTID" -- bash -c "rm -f /tmp/zammad-latest.tar.gz"
+  pct exec "$CTID" -- bash -c "[ -f /tmp/zammad-latest.tar.gz ] && rm -f /tmp/zammad-latest.tar.gz || echo 'Fichier déjà supprimé ou inexistant'"
   msg_ok "Zammad installé et configuré pour la production"
 }
 function configure_zammad() {
