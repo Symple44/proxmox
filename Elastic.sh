@@ -17,8 +17,8 @@ EOF
 
 APP="Elasticsearch & Kibana"
 var_disk="30"
-var_cpu="4"
-var_ram="8192"
+var_cpu="8"
+var_ram="16384" # 16 Go
 var_os="debian"
 var_version="12"
 variables
@@ -65,21 +65,28 @@ function install_elasticsearch() {
   msg_ok "Elasticsearch installé et démarré"
 }
 
-function install_kibana() {
-  msg_info "Installation de Kibana"
-  pct exec "$CTID" -- bash -c "apt install -y kibana"
-  pct exec "$CTID" -- bash -c "systemctl enable kibana --now"
-  msg_ok "Kibana installé et démarré"
+function configure_memory() {
+  msg_info "Configuration de la mémoire pour Elasticsearch"
+  
+  pct exec "$CTID" -- bash -c "sed -i 's/^-Xms.*/-Xms8g/' /etc/elasticsearch/jvm.options"
+  pct exec "$CTID" -- bash -c "sed -i 's/^-Xmx.*/-Xmx8g/' /etc/elasticsearch/jvm.options"
+
+  pct exec "$CTID" -- systemctl restart elasticsearch
+  msg_ok "Mémoire configurée pour Elasticsearch (8 Go)"
 }
 
 function configure_ssl() {
   msg_info "Configuration des certificats SSL"
+  
+  # Création des certificats CA
   pct exec "$CTID" -- bash -c "/usr/share/elasticsearch/bin/elasticsearch-certutil ca --silent --pem --out /etc/elasticsearch/certs/ca.zip"
   pct exec "$CTID" -- bash -c "unzip -o /etc/elasticsearch/certs/ca.zip -d /etc/elasticsearch/certs/"
   
+  # Création des certificats pour Elasticsearch et Kibana
   pct exec "$CTID" -- bash -c "/usr/share/elasticsearch/bin/elasticsearch-certutil cert --pem --ca-cert /etc/elasticsearch/certs/ca/ca.crt --ca-key /etc/elasticsearch/certs/ca/ca.key --out /etc/elasticsearch/certs/instance.zip --silent"
   pct exec "$CTID" -- bash -c "unzip -o /etc/elasticsearch/certs/instance.zip -d /etc/elasticsearch/certs/"
-
+  
+  # Permissions des certificats
   pct exec "$CTID" -- bash -c "chown -R elasticsearch:elasticsearch /etc/elasticsearch/certs/"
   pct exec "$CTID" -- bash -c "chmod -R 600 /etc/elasticsearch/certs/"
   
@@ -104,6 +111,24 @@ xpack.security.transport.ssl:
   msg_ok "Elasticsearch configuré"
 }
 
+function generate_kibana_token() {
+  msg_info "Génération du token pour Kibana"
+  TOKEN=$(pct exec "$CTID" -- bash -c "/usr/share/elasticsearch/bin/elasticsearch-service-tokens create elastic/kibana kibana-server")
+  if [ $? -ne 0 ]; then
+    msg_error "Échec de la génération du token pour Kibana"
+    exit 1
+  fi
+  echo -e "Token pour Kibana : \e[92m$TOKEN\e[39m"
+  msg_ok "Token généré pour Kibana"
+}
+
+function install_kibana() {
+  msg_info "Installation de Kibana"
+  pct exec "$CTID" -- bash -c "apt install -y kibana"
+  pct exec "$CTID" -- bash -c "systemctl enable kibana --now"
+  msg_ok "Kibana installé et démarré"
+}
+
 function configure_kibana() {
   msg_info "Configuration de Kibana"
   pct exec "$CTID" -- bash -c "echo 'server.ssl.enabled: true
@@ -116,13 +141,27 @@ elasticsearch.ssl.certificateAuthorities: [\"/etc/kibana/certs/http_ca.crt\"]
   msg_ok "Kibana configuré"
 }
 
+function retrieve_elastic_password() {
+  msg_info "Récupération du mot de passe Elasticsearch"
+  PASSWORD=$(pct exec "$CTID" -- bash -c "grep -m 1 'elastic' /etc/elasticsearch/elasticsearch.keystore | awk '{print \$NF}'")
+  if [ -z "$PASSWORD" ]; then
+    msg_error "Impossible de récupérer le mot de passe utilisateur elastic."
+  else
+    echo -e "Mot de passe utilisateur elastic : \e[92m$PASSWORD\e[39m"
+  fi
+  msg_ok "Mot de passe récupéré"
+}
+
 function main() {
   install_dependencies
   install_elasticsearch
-  install_kibana
+  configure_memory
   configure_ssl
   configure_elasticsearch
+  install_kibana
   configure_kibana
+  generate_kibana_token
+  retrieve_elastic_password
 }
 
 header_info
