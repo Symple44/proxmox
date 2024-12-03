@@ -80,16 +80,20 @@ function configure_ssl() {
   
   # Création des certificats CA
   pct exec "$CTID" -- bash -c "/usr/share/elasticsearch/bin/elasticsearch-certutil ca --silent --pem --out /etc/elasticsearch/certs/ca.zip"
-  pct exec "$CTID" -- bash -c "unzip -o /etc/elasticsearch/certs/ca.zip -d /etc/elasticsearch/certs/"
+  pct exec "$CTID" -- bash -c "unzip -j -o /etc/elasticsearch/certs/ca.zip -d /etc/elasticsearch/certs/ca"
   
   # Création des certificats pour Elasticsearch et Kibana
-  pct exec "$CTID" -- bash -c "/usr/share/elasticsearch/bin/elasticsearch-certutil cert --pem --ca-cert /etc/elasticsearch/certs/ca/ca.crt --ca-key /etc/elasticsearch/certs/ca/ca.key --out /etc/elasticsearch/certs/instance.zip --silent"
-  pct exec "$CTID" -- bash -c "unzip -o /etc/elasticsearch/certs/instance.zip -d /etc/elasticsearch/certs/"
+  pct exec "$CTID" -- bash -c "/usr/share/elasticsearch/bin/elasticsearch-certutil cert --pem --ca-cert /etc/elasticsearch/certs/ca/ca.crt --ca-key /etc/elasticsearch/certs/ca/ca.key --out /etc/elasticsearch/certs/instances.zip --silent"
+  pct exec "$CTID" -- bash -c "unzip -j -o /etc/elasticsearch/certs/instances.zip -d /etc/elasticsearch/certs/instances"
   
   # Permissions des certificats
   pct exec "$CTID" -- bash -c "chown -R elasticsearch:elasticsearch /etc/elasticsearch/certs/"
-  pct exec "$CTID" -- bash -c "chmod -R 600 /etc/elasticsearch/certs/"
-  
+  pct exec "$CTID" -- bash -c "chmod 600 /etc/elasticsearch/certs/instances/*.key"
+  pct exec "$CTID" -- bash -c "chmod 644 /etc/elasticsearch/certs/instances/*.crt"
+  pct exec "$CTID" -- bash -c "chmod 644 /etc/elasticsearch/certs/ca/ca.crt"
+
+  # Copier le certificat CA pour Kibana
+  pct exec "$CTID" -- bash -c "mkdir -p /etc/kibana/certs"
   pct exec "$CTID" -- bash -c "cp /etc/elasticsearch/certs/ca/ca.crt /etc/kibana/certs/http_ca.crt"
 
   msg_ok "Certificats SSL configurés"
@@ -100,11 +104,14 @@ function configure_elasticsearch() {
   pct exec "$CTID" -- bash -c "echo 'xpack.security.enabled: true
 xpack.security.http.ssl:
   enabled: true
-  certificate: /etc/elasticsearch/certs/localhost/localhost.crt
-  key: /etc/elasticsearch/certs/localhost/localhost.key
+  certificate: /etc/elasticsearch/certs/instances/elasticsearch.crt
+  key: /etc/elasticsearch/certs/instances/elasticsearch.key
+  certificate_authorities: [\"/etc/elasticsearch/certs/ca/ca.crt\"]
 xpack.security.transport.ssl:
   enabled: true
   verification_mode: certificate
+  certificate: /etc/elasticsearch/certs/instances/elasticsearch.crt
+  key: /etc/elasticsearch/certs/instances/elasticsearch.key
   certificate_authorities: [\"/etc/elasticsearch/certs/ca/ca.crt\"]
 ' >> /etc/elasticsearch/elasticsearch.yml"
   pct exec "$CTID" -- systemctl restart elasticsearch
@@ -132,9 +139,9 @@ function install_kibana() {
 function configure_kibana() {
   msg_info "Configuration de Kibana"
   pct exec "$CTID" -- bash -c "echo 'server.ssl.enabled: true
-server.ssl.certificate: /etc/elasticsearch/certs/localhost/localhost.crt
-server.ssl.key: /etc/elasticsearch/certs/localhost/localhost.key
-elasticsearch.hosts: [\"https://localhost:9200\"]
+server.ssl.certificate: \"/etc/elasticsearch/certs/instances/kibana.crt\"
+server.ssl.key: \"/etc/elasticsearch/certs/instances/kibana.key\"
+elasticsearch.hosts: [\"https://192.168.0.17:9200\"]
 elasticsearch.ssl.certificateAuthorities: [\"/etc/kibana/certs/http_ca.crt\"]
 ' >> /etc/kibana/kibana.yml"
   pct exec "$CTID" -- systemctl restart kibana
@@ -142,14 +149,32 @@ elasticsearch.ssl.certificateAuthorities: [\"/etc/kibana/certs/http_ca.crt\"]
 }
 
 function retrieve_elastic_password() {
-  msg_info "Récupération du mot de passe Elasticsearch"
-  PASSWORD=$(pct exec "$CTID" -- bash -c "grep -m 1 'elastic' /etc/elasticsearch/elasticsearch.keystore | awk '{print \$NF}'")
+  msg_info "Récupération du mot de passe utilisateur Elasticsearch"
+  PASSWORD=$(pct exec "$CTID" -- bash -c "cat /etc/elasticsearch/secure_password")
   if [ -z "$PASSWORD" ]; then
     msg_error "Impossible de récupérer le mot de passe utilisateur elastic."
   else
     echo -e "Mot de passe utilisateur elastic : \e[92m$PASSWORD\e[39m"
   fi
   msg_ok "Mot de passe récupéré"
+}
+function motd_ssh_custom() {
+  msg_info "Customizing MOTD and SSH access"
+  # Customize MOTD with Superset specific message
+  pct exec $CTID -- bash -c "echo 'Welcome to your Elastic LXC container!' > /etc/motd"
+  
+  # Set up auto-login for root on tty1
+  pct exec $CTID -- mkdir -p /etc/systemd/system/container-getty@1.service.d
+  pct exec $CTID -- bash -c "cat <<EOF >/etc/systemd/system/container-getty@1.service.d/override.conf
+[Service]
+ExecStart=
+ExecStart=-/sbin/agetty --autologin root --noclear --keep-baud tty%I 115200,38400,9600 \\$TERM
+EOF"
+
+  # Reload systemd and restart getty service to apply auto-login
+  pct exec $CTID -- systemctl daemon-reload
+  pct exec $CTID -- systemctl restart container-getty@1.service
+  msg_ok "MOTD and SSH access customized"
 }
 
 function main() {
@@ -168,8 +193,15 @@ header_info
 start
 build_container
 main
+motd_ssh_custom
 description
 
 IP=$(pct exec "$CTID" -- hostname -I | awk '{print $1}')
 msg_ok "Installation d'Elasticsearch et Kibana terminée!"
 echo -e "Accédez à Kibana à l'adresse : https://$IP:5601"
+echo -e " # Ajouter la configuration pour le serveur secondaire 192.168.0.15"
+echo -e " # Cette partie devra être exécutée manuellement"
+echo -e " # scp /etc/elasticsearch/certs/instances/oweoIA.crt user@192.168.0.15:/path/to/certs/"
+echo -e " # scp /etc/elasticsearch/certs/instances/oweoIA.key user@192.168.0.15:/path/to/certs/"
+echo -e " # scp /etc/elasticsearch/certs/ca/ca.crt user@192.168.0.15:/path/to/certs/"
+
